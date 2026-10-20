@@ -21,7 +21,7 @@ const (
 	SettingPeriodFrom     = "Laikotarpis nuo"
 	SettingPeriodTo       = "Laikotarpis iki"
 	SettingDelay          = "Pauzė tarp užklausų, ms"
-	SettingCacheFinalDays = "Talpykla galutinė po, d."
+	SettingCacheFinalDays = "Rezultatai galutiniai po, d."
 )
 
 // Participant columns.

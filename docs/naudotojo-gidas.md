@@ -55,7 +55,7 @@ Atidarykite **Nustatymai** lapą. Užpildykite stulpelį **Reikšmė** šalia ki
 | Laikotarpis nuo | Laikotarpio pradžia | `2026-01-01` |
 | Laikotarpis iki | Laikotarpio pabaiga | `2026-12-31` |
 | Pauzė tarp užklausų, ms | Pauzė milisekundėmis (numatytas 200) | `200` |
-| Talpykla galutinė po, d. | Po kiek dienų rezultatai galutiniai (numatytas 14) | `14` |
+| Rezultatai galutiniai po, d. | Po kiek dienų rezultatai galutiniai (numatytas 14) | `14` |
 
 **Svarbu:** URL šablonus ir adresą gausite iš administratoriaus. Jų nerasite viešai.
 
