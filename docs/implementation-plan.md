@@ -62,7 +62,7 @@ The site's path words are distinctive enough to identify it, so they cannot live
 - Back-off on network error, 429 or 5xx: wait 5 s, then 30 s, then give up on that page. The page is recorded as a warning and the run continues.
 - Disk cache in `cache/` next to the executable. File name = sha256 of path+query. Stores body + fetched-at.
   - Search and person results pages: always re-fetched.
-  - Class pages: if the **Event Date** is older than `Talpykla galutinė po, d.` (default **14**) and a cached copy exists, use the cache. Otherwise re-fetch.
+  - Class pages: if the **Event Date** is older than `Rezultatai galutiniai po, d.` (default **14**) and a cached copy exists, use the cache. Otherwise re-fetch.
 - Progress line: `[123/540] Pavyzdžio taurė M21 …`. It counts planned fetches, so the total is known once the person pages are read.
 
 ## M4. Parsers (`internal/parse`) with synthetic fixtures
