@@ -10,6 +10,16 @@ import (
 // ProgressFunc is called before each fetch with current index, total, and description.
 type ProgressFunc func(current, total int, desc string)
 
+// FetchStats tracks request and cache counters.
+type FetchStats struct {
+	Requests   int // HTTP requests sent
+	CacheHits  int // pages served from cache
+	Errors     int // pages that failed after all retries
+}
+
+// Total returns the total number of fetch calls (requests + cache hits + errors).
+func (s FetchStats) Total() int { return s.Requests + s.CacheHits + s.Errors }
+
 // Client fetches pages sequentially with delay and back-off.
 type Client struct {
 	baseURL   string
@@ -20,6 +30,7 @@ type Client struct {
 	finalDays int
 	lastFetch time.Time
 	backoffs  []time.Duration // retry back-off durations
+	Stats     FetchStats
 }
 
 // NewClient creates a new sequential HTTP client.
@@ -52,6 +63,7 @@ func (c *Client) Fetch(path string, eventDate time.Time, alwaysFresh bool) Fetch
 	// Check cache first
 	if c.cache != nil {
 		if body, ok := c.cache.Get(url, eventDate, c.finalDays, alwaysFresh); ok {
+			c.Stats.CacheHits++
 			return FetchResult{Body: body, FromCache: true}
 		}
 	}
@@ -67,6 +79,7 @@ func (c *Client) Fetch(path string, eventDate time.Time, alwaysFresh bool) Fetch
 			time.Sleep(backoff)
 		}
 
+		c.Stats.Requests++
 		body, err := c.doRequest(url)
 		if err == nil {
 			// Store in cache
@@ -78,6 +91,7 @@ func (c *Client) Fetch(path string, eventDate time.Time, alwaysFresh bool) Fetch
 		lastErr = err
 	}
 
+	c.Stats.Errors++
 	return FetchResult{Error: fmt.Errorf("after 3 attempts: %w", lastErr)}
 }
 
