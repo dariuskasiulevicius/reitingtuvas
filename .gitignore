@@ -1,0 +1,18 @@
+# Workbook and reports (personal data)
+*.xlsx
+
+# Downloaded pages cache
+cache/
+
+# Build output
+dist/
+
+# Leak guard forbidden strings (contains real site address)
+.forbidden-strings
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
