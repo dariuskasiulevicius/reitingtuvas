@@ -14,6 +14,9 @@ import (
 
 var legRegex = regexp.MustCompile(`(\d+)\s*leg`)
 
+// LegRegex returns the compiled regex for matching "N leg" patterns.
+func LegRegex() *regexp.Regexp { return legRegex }
+
 // ParsePersonResults parses a person's results page and returns the event rows.
 // classTmpl is used to extract event/class/day from class link hrefs.
 // eventTmpl is used to extract event ids from event link hrefs.
