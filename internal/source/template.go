@@ -138,10 +138,11 @@ type Templates struct {
 	Person  *Template // person results by sid
 	Class   *Template // class results: event, class, day
 	Event   *Template // event page
+	Profile *Template // person profile page (for extracting sids from hrefs)
 }
 
 // NewTemplates parses all template strings. Returns an error if any is invalid.
-func NewTemplates(search, person, class, event string) (*Templates, error) {
+func NewTemplates(search, person, class, event, profile string) (*Templates, error) {
 	s, err := NewTemplate(search)
 	if err != nil {
 		return nil, fmt.Errorf("search template: %w", err)
@@ -158,5 +159,9 @@ func NewTemplates(search, person, class, event string) (*Templates, error) {
 	if err != nil {
 		return nil, fmt.Errorf("event template: %w", err)
 	}
-	return &Templates{Search: s, Person: p, Class: c, Event: e}, nil
+	pr, err := NewTemplate(profile)
+	if err != nil {
+		return nil, fmt.Errorf("profile template: %w", err)
+	}
+	return &Templates{Search: s, Person: p, Class: c, Event: e, Profile: pr}, nil
 }

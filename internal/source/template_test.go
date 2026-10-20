@@ -9,7 +9,8 @@ const (
 	FakeSearchPath = "/p/find?q={query}"
 	FakePersonPath = "/p/find?person={sid}"
 	FakeClassPath  = "/e/{event}/class/{class}?day={day}"
-	FakeEventPath  = "/e/{event}"
+	FakeEventPath   = "/e/{event}"
+	FakeProfilePath = "/p/profile/{sid}"
 )
 
 func TestNewTemplate_Valid(t *testing.T) {
@@ -134,7 +135,7 @@ func TestTemplate_Extract_PersonFromHref(t *testing.T) {
 }
 
 func TestNewTemplates(t *testing.T) {
-	ts, err := NewTemplates(FakeSearchPath, FakePersonPath, FakeClassPath, FakeEventPath)
+	ts, err := NewTemplates(FakeSearchPath, FakePersonPath, FakeClassPath, FakeEventPath, FakeProfilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,7 @@ func TestNewTemplates(t *testing.T) {
 }
 
 func TestNewTemplates_PropagatesError(t *testing.T) {
-	_, err := NewTemplates("", FakePersonPath, FakeClassPath, FakeEventPath)
+	_, err := NewTemplates("", FakePersonPath, FakeClassPath, FakeEventPath, FakeProfilePath)
 	if err == nil {
 		t.Error("expected error for empty search template")
 	}

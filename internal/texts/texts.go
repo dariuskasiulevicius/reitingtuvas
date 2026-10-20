@@ -17,6 +17,7 @@ const (
 	SettingPersonPath     = "Dalyvio rezultatų kelias"
 	SettingClassPath      = "Klasės rezultatų kelias"
 	SettingEventPath      = "Varžybų kelias"
+	SettingProfilePath    = "Dalyvio profilio kelias"
 	SettingPeriodFrom     = "Laikotarpis nuo"
 	SettingPeriodTo       = "Laikotarpis iki"
 	SettingDelay          = "Pauzė tarp užklausų, ms"

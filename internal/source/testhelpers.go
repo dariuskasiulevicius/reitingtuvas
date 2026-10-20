@@ -14,7 +14,7 @@ const (
 // FakeTemplates returns a Templates instance using the fake paths.
 // Panics on error (safe in tests).
 func FakeTemplates() *Templates {
-	t, err := NewTemplates(FakeSearch, FakePerson, FakeClass, FakeEvent)
+	t, err := NewTemplates(FakeSearch, FakePerson, FakeClass, FakeEvent, FakeProfile)
 	if err != nil {
 		panic(err)
 	}
