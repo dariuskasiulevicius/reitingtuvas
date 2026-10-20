@@ -122,14 +122,14 @@ func ParseSettings(raw map[string]string) (*source.Settings, error) {
 	s.Templates = tmpls
 
 	if v := raw[texts.SettingPeriodFrom]; v != "" {
-		t, err := time.Parse("2006-01-02", v)
+		t, err := parseFlexDate(v)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", texts.SettingPeriodFrom, err)
 		}
 		s.PeriodFrom = t
 	}
 	if v := raw[texts.SettingPeriodTo]; v != "" {
-		t, err := time.Parse("2006-01-02", v)
+		t, err := parseFlexDate(v)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", texts.SettingPeriodTo, err)
 		}
@@ -387,6 +387,41 @@ func (wb *Workbook) createTemplate() error {
 }
 
 // --- Helpers ---
+
+// parseFlexDate parses dates in multiple formats that Excel may produce:
+// "2006-01-02", "01-02-06", "01/02/2006", "1/2/2006", or an Excel serial number.
+func parseFlexDate(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+
+	// Try Excel serial number first (pure digits or float)
+	// Excel serial 36526 = 2000-01-01, 73050 ≈ 2099-12-31
+	if serial, err := strconv.ParseFloat(s, 64); err == nil && serial >= 36526 && serial <= 73050 {
+		// Excel epoch: 1900-01-01 = serial 1 (with the 1900 leap year bug)
+		days := int(serial) - 1
+		if serial >= 60 {
+			days-- // Excel incorrectly treats 1900 as a leap year
+		}
+		epoch := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+		return epoch.AddDate(0, 0, days), nil
+	}
+
+	// Try common date formats
+	formats := []string{
+		"2006-01-02",
+		"01-02-06",
+		"1/2/2006",
+		"01/02/2006",
+		"2006/01/02",
+		"02.01.2006",
+		"2006.01.02",
+	}
+	for _, fmt := range formats {
+		if t, err := time.Parse(fmt, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("neatpažintas datos formatas %q (naudokite YYYY-MM-DD)", s)
+}
 
 func findHeaders(rows [][]string) map[string]int {
 	headers := make(map[string]int)

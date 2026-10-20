@@ -202,6 +202,40 @@ func TestReportSheet_WritesAndOpens(t *testing.T) {
 	}
 }
 
+func TestParseFlexDate(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"2026-01-01", "2026-01-01"},
+		{"46023", "2026-01-01"},   // Excel serial number
+		{"46387", "2026-12-31"},   // Excel serial number
+		{"01-01-26", "2026-01-01"},
+		{"1/1/2026", "2026-01-01"},
+		{"01/01/2026", "2026-01-01"},
+	}
+	for _, tt := range tests {
+		got, err := parseFlexDate(tt.input)
+		if err != nil {
+			t.Errorf("parseFlexDate(%q) error: %v", tt.input, err)
+			continue
+		}
+		if got.Format("2006-01-02") != tt.want {
+			t.Errorf("parseFlexDate(%q) = %s, want %s", tt.input, got.Format("2006-01-02"), tt.want)
+		}
+	}
+}
+
+func TestParseFlexDate_Errors(t *testing.T) {
+	bad := []string{"", "hello", "2026"}
+	for _, s := range bad {
+		_, err := parseFlexDate(s)
+		if err == nil {
+			t.Errorf("parseFlexDate(%q) should fail", s)
+		}
+	}
+}
+
 func TestBackup(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.xlsx")
