@@ -275,6 +275,57 @@ func TestParseClassPage_3DayDsq(t *testing.T) {
 	}
 }
 
+func TestParseClassPage_MultiDayPoints(t *testing.T) {
+	f := openFixture(t, "class_multi_day_points.html")
+	page, err := ParseClassPage(f, profileTmpl(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.DayNames) != 3 {
+		t.Fatalf("day names = %v, want 3", page.DayNames)
+	}
+	if page.DayNames[0] != "Sprintas" {
+		t.Errorf("day1 name = %q", page.DayNames[0])
+	}
+	if len(page.Rows) != 3 {
+		t.Fatalf("rows = %d, want 3", len(page.Rows))
+	}
+
+	// Leader (place 1): day 1 time should be "26:09( 2)" not "807"
+	leader := page.Rows[0]
+	timeStr, place := ParseDayTimeAndPlace(leader.PerDay[0])
+	if timeStr != "26:09" || place != 2 {
+		t.Errorf("leader day1: time=%q place=%d, want 26:09/2", timeStr, place)
+	}
+
+	// Day 1 leader time should be from place 1 entry = "21:06( 1)"
+	// (Antras Tomas is place 2 overall but has 1000 points = fastest day 1)
+	day1Leader := page.Rows[1] // place 2 overall
+	d1time, d1place := ParseDayTimeAndPlace(day1Leader.PerDay[0])
+	if d1time != "21:06" || d1place != 1 {
+		t.Errorf("day1 leader: time=%q place=%d", d1time, d1place)
+	}
+
+	// Participant 179: day 1 = dns (not a points number), day 2 = time, day 3 = time
+	p := page.Rows[2]
+	if p.SID != "179" {
+		t.Errorf("sid = %q", p.SID)
+	}
+	if p.PerDay[0] != "dns" {
+		t.Errorf("day1 = %q, want dns", p.PerDay[0])
+	}
+	// Day 2 should be time "1:16:55( 7)", not points "678"
+	timeStr2, place2 := ParseDayTimeAndPlace(p.PerDay[1])
+	if timeStr2 != "1:16:55" || place2 != 7 {
+		t.Errorf("day2: time=%q place=%d, want 1:16:55/7", timeStr2, place2)
+	}
+	// Day 3 should be "31:06( 3)"
+	timeStr3, place3 := ParseDayTimeAndPlace(p.PerDay[2])
+	if timeStr3 != "31:06" || place3 != 3 {
+		t.Errorf("day3: time=%q place=%d, want 31:06/3", timeStr3, place3)
+	}
+}
+
 // --- Relay tests ---
 
 func TestParseRelayClassPage(t *testing.T) {

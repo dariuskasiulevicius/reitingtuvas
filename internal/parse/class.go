@@ -13,6 +13,13 @@ import (
 
 var timeWithPlaceRegex = regexp.MustCompile(`^([\d:]+)\s*(?:\(\s*(\d+)\s*\))?$`)
 
+// dayColumn tracks where each day's data lives in the row.
+type dayColumn struct {
+	name      string
+	colIdx    int  // index of the time column in td cells
+	hasPoints bool // true when colspan=2 (points + time)
+}
+
 // ParseClassPage parses a class results page (single-day or multi-day total view).
 // profileTmpl is used to extract sids from person href attributes.
 func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, error) {
@@ -35,25 +42,83 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 		return nil, fmt.Errorf("page structure changed: no class results table found")
 	}
 
-	// Detect day names from header row.
-	// Single-day: Place | Name | Country | Club | Time | min/km
-	// Multi-day:  Place | Name | Country | Club | total | Day1name | Day2name | ...
+	// Map header <th> elements to data column positions.
+	// Some headers have colspan="2" (points-scored events) — each such header
+	// occupies 2 <td> cells in data rows: points + time.
 	headerRow := table.Find("tr").First()
 	headers := headerRow.Find("th")
-	headerCount := headers.Length()
 
-	// Check if multi-day: headers beyond the 5th column (index 4+) that
-	// aren't "min/km" are day names.
-	if headerCount > 5 {
-		for j := 5; j < headerCount; j++ {
-			name := strings.TrimSpace(headers.Eq(j).Text())
-			if name != "" && name != "min/km" {
-				page.DayNames = append(page.DayNames, name)
+	// Build a column map: track the td-index each header maps to.
+	type headerInfo struct {
+		text    string
+		colspan int
+		tdStart int // starting td index for this header
+	}
+	var hdrMap []headerInfo
+	tdIdx := 0
+	headers.Each(func(i int, th *goquery.Selection) {
+		cs := 1
+		if csAttr, ok := th.Attr("colspan"); ok {
+			cs, _ = strconv.Atoi(csAttr)
+			if cs < 1 {
+				cs = 1
 			}
+		}
+		hdrMap = append(hdrMap, headerInfo{
+			text:    strings.TrimSpace(th.Text()),
+			colspan: cs,
+			tdStart: tdIdx,
+		})
+		tdIdx += cs
+	})
+
+	// Fixed headers: Place(0), Name(1), Country(2), Club(3).
+	// Everything from index 4+ is result columns.
+	// Single-day without colspan: index 4 = Time, 5 = min/km
+	// Multi-day without colspan: index 4 = total, 5+ = day names
+	// Multi-day with colspan=2: index 4 = total (2 cols), 5+ = days (2 cols each)
+
+	var dayCols []dayColumn
+	isSingleDay := true
+
+	if len(hdrMap) > 5 {
+		// Check headers beyond fixed 4 + total
+		for i := 5; i < len(hdrMap); i++ {
+			name := hdrMap[i].text
+			if name == "" || name == "min/km" {
+				continue
+			}
+			isSingleDay = false
+			dc := dayColumn{
+				name:      name,
+				hasPoints: hdrMap[i].colspan >= 2,
+			}
+			if dc.hasPoints {
+				// Time is in the second sub-column
+				dc.colIdx = hdrMap[i].tdStart + 1
+			} else {
+				dc.colIdx = hdrMap[i].tdStart
+			}
+			dayCols = append(dayCols, dc)
 		}
 	}
 
-	isMultiDay := len(page.DayNames) > 0
+	// Check if "total" header (index 4) also has colspan
+	totalHasPoints := false
+	totalColIdx := 4
+	if len(hdrMap) > 4 {
+		if hdrMap[4].colspan >= 2 {
+			totalHasPoints = true
+		}
+		totalColIdx = hdrMap[4].tdStart
+	}
+	_ = totalHasPoints // used only for alignment awareness
+
+	if !isSingleDay {
+		for _, dc := range dayCols {
+			page.DayNames = append(page.DayNames, dc.name)
+		}
+	}
 
 	// Parse competitor rows
 	table.Find("tr").Each(func(i int, row *goquery.Selection) {
@@ -83,22 +148,29 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 			}
 		}
 
-		if isMultiDay {
-			// Column 4 = total
-			c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(4).Text()))
-
-			// Columns 5+ = per-day results
-			for j := 0; j < len(page.DayNames); j++ {
-				colIdx := 5 + j
-				if colIdx < cells.Length() {
-					raw := cleanResultCell(strings.TrimSpace(cells.Eq(colIdx).Text()))
-					c.PerDay = append(c.PerDay, raw)
-				}
+		if isSingleDay {
+			// Total/time at column index 4
+			if totalColIdx < cells.Length() {
+				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(totalColIdx).Text()))
 			}
 		} else {
-			// Single-day: column 4 = time
-			if cells.Length() > 4 {
-				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(4).Text()))
+			// Total column — use the time sub-column if points-scored
+			totalTimeIdx := totalColIdx
+			if totalHasPoints {
+				totalTimeIdx = totalColIdx // points column; but total for points events = points sum, not time
+			}
+			if totalTimeIdx < cells.Length() {
+				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(totalTimeIdx).Text()))
+			}
+
+			// Per-day results — read the time column for each day
+			for _, dc := range dayCols {
+				if dc.colIdx < cells.Length() {
+					raw := cleanResultCell(strings.TrimSpace(cells.Eq(dc.colIdx).Text()))
+					c.PerDay = append(c.PerDay, raw)
+				} else {
+					c.PerDay = append(c.PerDay, "")
+				}
 			}
 		}
 
