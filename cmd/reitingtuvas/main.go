@@ -123,7 +123,10 @@ func main() {
 	// Step 7: Collect results
 	fmt.Println("Renkami rezultatai...")
 	results, warnings := coll.Collect(participants)
+	stats := client.Stats
 	fmt.Printf("\nSurinkta: %d rezultatų\n", len(results))
+	fmt.Printf("Užklausos: %d, iš talpyklos: %d, klaidos: %d\n",
+		stats.Requests, stats.CacheHits, stats.Errors)
 
 	if len(warnings) > 0 {
 		fmt.Printf("Įspėjimai: %d\n", len(warnings))
