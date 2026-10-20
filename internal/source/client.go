@@ -1,0 +1,121 @@
+package source
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+// ProgressFunc is called before each fetch with current index, total, and description.
+type ProgressFunc func(current, total int, desc string)
+
+// Client fetches pages sequentially with delay and back-off.
+type Client struct {
+	baseURL   string
+	delay     time.Duration
+	userAgent string
+	http      *http.Client
+	cache     *Cache
+	finalDays int
+	lastFetch time.Time
+	backoffs  []time.Duration // retry back-off durations
+}
+
+// NewClient creates a new sequential HTTP client.
+func NewClient(baseURL string, delay time.Duration, cache *Cache, finalDays int, version string) *Client {
+	return &Client{
+		baseURL:   baseURL,
+		delay:     delay,
+		userAgent: fmt.Sprintf("reitingtuvas/%s", version),
+		http:      &http.Client{Timeout: 30 * time.Second},
+		cache:     cache,
+		finalDays: finalDays,
+		backoffs:  []time.Duration{0, 5 * time.Second, 30 * time.Second},
+	}
+}
+
+// FetchResult holds the outcome of a fetch.
+type FetchResult struct {
+	Body    []byte
+	FromCache bool
+	Error   error
+}
+
+// Fetch downloads a page, respecting delay and using cache when applicable.
+// path is the URL path (from template expansion).
+// eventDate is used for cache decisions; zero means always fresh.
+// alwaysFresh=true bypasses cache entirely (for search/person pages).
+func (c *Client) Fetch(path string, eventDate time.Time, alwaysFresh bool) FetchResult {
+	url := c.baseURL + path
+
+	// Check cache first
+	if c.cache != nil {
+		if body, ok := c.cache.Get(url, eventDate, c.finalDays, alwaysFresh); ok {
+			return FetchResult{Body: body, FromCache: true}
+		}
+	}
+
+	// Enforce delay
+	c.waitDelay()
+
+	// Fetch with back-off: 0s → 5s → 30s → give up
+	var lastErr error
+
+	for attempt, backoff := range c.backoffs {
+		if attempt > 0 {
+			time.Sleep(backoff)
+		}
+
+		body, err := c.doRequest(url)
+		if err == nil {
+			// Store in cache
+			if c.cache != nil {
+				_ = c.cache.Put(url, body)
+			}
+			return FetchResult{Body: body}
+		}
+		lastErr = err
+	}
+
+	return FetchResult{Error: fmt.Errorf("after 3 attempts: %w", lastErr)}
+}
+
+func (c *Client) doRequest(url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	c.lastFetch = time.Now()
+	return body, nil
+}
+
+func (c *Client) waitDelay() {
+	if c.lastFetch.IsZero() {
+		return
+	}
+	elapsed := time.Since(c.lastFetch)
+	if elapsed < c.delay {
+		time.Sleep(c.delay - elapsed)
+	}
+}
