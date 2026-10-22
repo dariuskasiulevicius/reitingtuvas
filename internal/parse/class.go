@@ -112,7 +112,11 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 		}
 		totalColIdx = hdrMap[4].tdStart
 	}
-	_ = totalHasPoints // used only for alignment awareness
+	// When totalHasPoints, the time is in the 2nd sub-column (tdStart+1)
+	totalTimeIdx := totalColIdx
+	if totalHasPoints {
+		totalTimeIdx = totalColIdx + 1
+	}
 
 	if !isSingleDay {
 		for _, dc := range dayCols {
@@ -149,16 +153,10 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 		}
 
 		if isSingleDay {
-			// Total/time at column index 4
-			if totalColIdx < cells.Length() {
-				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(totalColIdx).Text()))
+			if totalTimeIdx < cells.Length() {
+				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(totalTimeIdx).Text()))
 			}
 		} else {
-			// Total column — use the time sub-column if points-scored
-			totalTimeIdx := totalColIdx
-			if totalHasPoints {
-				totalTimeIdx = totalColIdx // points column; but total for points events = points sum, not time
-			}
 			if totalTimeIdx < cells.Length() {
 				c.Total = cleanResultCell(strings.TrimSpace(cells.Eq(totalTimeIdx).Text()))
 			}
