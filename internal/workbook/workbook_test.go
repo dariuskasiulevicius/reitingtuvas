@@ -140,48 +140,33 @@ func TestReportSheet_WritesAndOpens(t *testing.T) {
 	}
 	defer wb.Close()
 
-	results := []domain.EventResult{
-		{
-			Participant: domain.Participant{Surname: "Pirmas", Name: "Vardas", SID: "100"},
-			Event: domain.Event{
-				ID: "2026172", Name: "Testas", Date: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC),
-				Sport: "sport ob", DayCount: 1, Coefficient: 1.00,
-			},
-			Class:        "V65",
-			Result:       45*time.Minute + 48*time.Second,
-			Place:        1,
-			LeaderResult: 45*time.Minute + 48*time.Second,
-			Days: []domain.DayResult{
-				{DayNumber: 1, Class: "V65", Status: "ok",
-					Time: 45*time.Minute + 48*time.Second, Place: 1,
-					LeaderTime: 45*time.Minute + 48*time.Second},
-			},
-		},
-		{
-			Participant: domain.Participant{Surname: "Antras", Name: "Vardas", SID: "200"},
-			Event: domain.Event{
-				ID: "2026058", Name: "Dviejų dienų", Date: time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
-				Sport: "sport ob", DayCount: 2, Coefficient: 1.50,
-			},
-			Class:        "BM55",
-			Result:       1*time.Hour + 48*time.Minute + 3*time.Second,
-			Place:        6,
-			LeaderResult: 1*time.Hour + 28*time.Minute + 5*time.Second,
-			Days: []domain.DayResult{
-				{DayNumber: 1, Class: "BM55", Status: "ok",
-					Time: 1*time.Hour + 14*time.Minute + 36*time.Second, Place: 7,
-					LeaderTime: 1*time.Hour + 50*time.Second},
-				{DayNumber: 2, Class: "BM55", Status: "ok",
-					Time: 33*time.Minute + 27*time.Second, Place: 8,
-					LeaderTime: 27*time.Minute + 15*time.Second},
-			},
-		},
+	stored := []domain.StoredResult{
+		{SID: "100", EventID: "2026172", DayNumber: 1, Class: "V65", Status: "ok",
+			Time: 45*time.Minute + 48*time.Second, LeaderTime: 45*time.Minute + 48*time.Second, Place: 1},
+		{SID: "200", EventID: "2026058", DayNumber: 1, Class: "BM55", Status: "ok",
+			Time: 1*time.Hour + 14*time.Minute + 36*time.Second, LeaderTime: 1*time.Hour + 50*time.Second, Place: 7},
+		{SID: "200", EventID: "2026058", DayNumber: 2, Class: "BM55", Status: "ok",
+			Time: 33*time.Minute + 27*time.Second, LeaderTime: 27*time.Minute + 15*time.Second, Place: 8},
+	}
+
+	participants := []domain.Participant{
+		{Surname: "Pirmas", Name: "Vardas", SID: "100"},
+		{Surname: "Antras", Name: "Vardas", SID: "200"},
+	}
+
+	events := map[string]domain.Event{
+		"2026172": {ID: "2026172", Name: "Testas", Date: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)},
+		"2026058": {ID: "2026058", Name: "Dviejų dienų", Date: time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC)},
 	}
 
 	coefficients := map[string]float64{"2026058": 1.50}
-	dayDates := map[string]time.Time{}
+	openClassCoef := 0.9
+	topN := 8
 
-	sheetName, err := report.WriteReport(wb.ExcelFile(), results, coefficients, dayDates)
+	rating := domain.ComputeRating(stored, participants, coefficients, openClassCoef, topN)
+	columns := report.BuildEventColumns(stored, events)
+
+	sheetName, err := report.WriteReport(wb.ExcelFile(), rating, columns, coefficients, openClassCoef, topN, 2026, "")
 	if err != nil {
 		t.Fatal(err)
 	}

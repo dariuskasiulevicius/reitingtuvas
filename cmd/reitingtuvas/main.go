@@ -1,25 +1,26 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/collect"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/domain"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/report"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/source"
+	"github.com/dariuskasiulevicius/reitingtuvas/internal/texts"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/workbook"
 )
 
-// version is set by the linker at build time.
 var version = "dev"
 
 const workbookName = "reitingtuvas.xlsx"
 
 func main() {
-	// Dev flags
 	wbPathFlag := flag.String("workbook", "", "path to workbook (overrides exe dir)")
 	noPause := flag.Bool("no-pause", false, "don't wait for Enter at the end")
 	flag.Parse()
@@ -36,14 +37,14 @@ func main() {
 
 	fmt.Printf("reitingtuvas %s\n", version)
 
-	// Step 1: Lock check
+	// Lock check
 	if _, err := os.Stat(wbPath); err == nil {
 		if err := workbook.CheckLock(wbPath); err != nil {
 			exitWithError(err.Error(), *noPause)
 		}
 	}
 
-	// Step 2: Open workbook (or create template)
+	// Open workbook (or create template)
 	wb, created, err := workbook.Open(wbPath)
 	if err != nil {
 		exitWithError(fmt.Sprintf("Knyga: %v", err), *noPause)
@@ -57,7 +58,7 @@ func main() {
 		return
 	}
 
-	// Step 3: Read settings
+	// Read settings
 	rawSettings, err := wb.ReadSettings()
 	if err != nil {
 		exitWithError(fmt.Sprintf("Nustatymai: %v", err), *noPause)
@@ -73,7 +74,7 @@ func main() {
 		settings.PeriodTo.Format("2006-01-02"),
 	)
 
-	// Step 4: Read participants
+	// Read participants
 	participants, err := wb.ReadParticipants()
 	if err != nil {
 		exitWithError(fmt.Sprintf("Dalyviai: %v", err), *noPause)
@@ -83,92 +84,130 @@ func main() {
 	}
 	fmt.Printf("Dalyviai: %d\n", len(participants))
 
-	// Step 5: Set up cache + client
-	cacheDir := filepath.Join(dir, "cache")
-	cache, err := source.NewCache(cacheDir)
-	if err != nil {
-		exitWithError(fmt.Sprintf("Talpykla: %v", err), *noPause)
-	}
+	// Prompt: download?
+	fmt.Print(texts.MsgPromptDownload)
+	download := askYN()
 
-	client := source.NewClient(settings.BaseURL, settings.Delay, cache, settings.CacheFinalDays, version)
-
-	// Progress callback
-	progress := func(current, total int, desc string) {
-		fmt.Printf("\r[%d/%d] %s          ", current, total, desc)
-	}
-
-	coll := collect.NewCollector(client, settings, progress)
-
-	// Step 6: Resolve participants
-	fmt.Println("Ieškoma dalyvių...")
-	participants = coll.Resolve(participants)
-
-	resolved := 0
-	for _, p := range participants {
-		if p.SID != "" {
-			resolved++
+	if download {
+		cacheDir := filepath.Join(dir, "cache")
+		cache, err := source.NewCache(cacheDir)
+		if err != nil {
+			exitWithError(fmt.Sprintf("Talpykla: %v", err), *noPause)
 		}
-	}
-	fmt.Printf("\nRasta: %d/%d\n", resolved, len(participants))
 
-	// Write back SIDs and statuses
-	if err := wb.WriteParticipants(participants); err != nil {
-		fmt.Printf("Įspėjimas: nepavyko atnaujinti dalyvių: %v\n", err)
-	}
+		client := source.NewClient(settings.BaseURL, settings.Delay, cache, settings.CacheFinalDays, version)
 
-	if resolved == 0 {
-		exitWithError("Nė vienas dalyvis nerastas. Patikrinkite vardus ir pavardes.", *noPause)
-	}
-
-	// Step 7: Collect results
-	fmt.Println("Renkami rezultatai...")
-	results, warnings := coll.Collect(participants)
-	stats := client.Stats
-	fmt.Printf("\nSurinkta: %d rezultatų\n", len(results))
-	fmt.Printf("Užklausos: %d, iš talpyklos: %d, klaidos: %d\n",
-		stats.Requests, stats.CacheHits, stats.Errors)
-
-	if len(warnings) > 0 {
-		fmt.Printf("Įspėjimai: %d\n", len(warnings))
-		for _, w := range warnings {
-			fmt.Printf("  ! %s\n", w)
+		progress := func(current, total int, desc string) {
+			fmt.Printf("\r[%d/%d] %s          ", current, total, desc)
 		}
-	}
 
-	// Step 8: Upsert events and days
-	existingEvents, _ := wb.ReadEventIDs()
-	seenEvents := make(map[string]bool)
-	for _, r := range results {
-		if seenEvents[r.Event.ID] {
-			continue
-		}
-		seenEvents[r.Event.ID] = true
+		coll := collect.NewCollector(client, settings, progress)
 
-		if !existingEvents[r.Event.ID] {
-			ev := r.Event
-			if ev.Coefficient == 0 {
-				ev.Coefficient = 1.00
-			}
-			wb.AppendEvent(ev)
+		// Resolve participants
+		fmt.Println("Ieškoma dalyvių...")
+		participants = coll.Resolve(participants)
 
-			// Append days
-			for _, d := range r.Days {
-				wb.AppendDay(domain_Day(r.Event.ID, d, r.Event), r.Event.Name)
+		resolved := 0
+		for _, p := range participants {
+			if p.SID != "" {
+				resolved++
 			}
 		}
+		fmt.Printf("\nRasta: %d/%d\n", resolved, len(participants))
+
+		if err := wb.WriteParticipants(participants); err != nil {
+			fmt.Printf("Įspėjimas: nepavyko atnaujinti dalyvių: %v\n", err)
+		}
+
+		if resolved == 0 {
+			exitWithError("Nė vienas dalyvis nerastas. Patikrinkite vardus ir pavardes.", *noPause)
+		}
+
+		// Collect results
+		fmt.Println("Renkami rezultatai...")
+		crawled, warnings := coll.Collect(participants)
+		stats := client.Stats
+		fmt.Printf("\nSurinkta: %d rezultatų\n", len(crawled))
+		fmt.Printf("Užklausos: %d, iš talpyklos: %d, klaidos: %d\n",
+			stats.Requests, stats.CacheHits, stats.Errors)
+
+		if len(warnings) > 0 {
+			fmt.Printf("Įspėjimai: %d\n", len(warnings))
+			for _, w := range warnings {
+				fmt.Printf("  ! %s\n", w)
+			}
+		}
+
+		// Upsert events + days
+		existingEvents, _ := wb.ReadEventIDs()
+		seenEvents := make(map[string]bool)
+		for _, r := range crawled {
+			if seenEvents[r.Event.ID] {
+				continue
+			}
+			seenEvents[r.Event.ID] = true
+
+			if !existingEvents[r.Event.ID] {
+				ev := r.Event
+				if ev.Coefficient == 0 {
+					ev.Coefficient = 1.00
+				}
+				wb.AppendEvent(ev)
+
+				for _, d := range r.Days {
+					wb.AppendDay(domainDay(r.Event.ID, d, r.Event), r.Event.Name)
+				}
+			}
+		}
+
+		// Clear + write Rezultatai
+		stored := workbook.EventResultsToStored(crawled)
+		if err := wb.ClearAndWriteResults(stored); err != nil {
+			exitWithError(fmt.Sprintf("Rezultatai: %v", err), *noPause)
+		}
+		fmt.Printf("Rezultatai įrašyti: %d eilučių\n", len(stored))
 	}
 
-	// Step 9: Read coefficients and day date overrides
+	// Read all results (Rezultatai + Rankinis)
+	rezultatai, _ := wb.ReadResults()
+	rankinis, _ := wb.ReadManualEntries()
+	allResults := append(rezultatai, rankinis...)
+
+	if len(allResults) == 0 {
+		exitWithError(texts.MsgNoResults, *noPause)
+	}
+
+	fmt.Printf("Rezultatai ataskaitai: %d (automatiniai: %d, rankiniai: %d)\n",
+		len(allResults), len(rezultatai), len(rankinis))
+
+	// Read coefficients + events
 	coefficients, _ := wb.ReadCoefficients()
-	dayDates, _ := wb.ReadDayDates()
+	events, _ := wb.ReadEvents()
 
-	// Step 10: Write report sheet
-	sheetName, err := report.WriteReport(wb.ExcelFile(), results, coefficients, dayDates)
+	// Compute rating
+	rating := domain.ComputeRating(allResults, participants, coefficients, settings.OpenClassCoef, settings.TopN)
+	columns := report.BuildEventColumns(allResults, events)
+
+	periodYear := settings.PeriodFrom.Year()
+
+	// Prompt: overwrite or new?
+	var overwriteSheet string
+	if last := wb.LastReportSheet(); last != "" {
+		fmt.Print(texts.MsgPromptOverwrite)
+		if askOverwrite() {
+			overwriteSheet = last
+		}
+	}
+
+	sheetName, err := report.WriteReport(
+		wb.ExcelFile(), rating, columns, coefficients,
+		settings.OpenClassCoef, settings.TopN, periodYear, overwriteSheet,
+	)
 	if err != nil {
 		exitWithError(fmt.Sprintf("Ataskaita: %v", err), *noPause)
 	}
 
-	// Step 11: Backup and save
+	// Backup + save
 	if err := workbook.Backup(wbPath); err != nil {
 		fmt.Printf("Įspėjimas: atsarginė kopija nepavyko: %v\n", err)
 	}
@@ -178,11 +217,11 @@ func main() {
 	}
 
 	fmt.Printf("\nAtaskaita parašyta į lapą: %s\n", sheetName)
+	fmt.Printf("Dalyvių: %d, Varžybų dienų: %d\n", len(rating), len(columns))
 	fmt.Printf("Knyga: %s\n", wbPath)
 	waitForEnter(*noPause)
 }
 
-// execDir returns the directory where the executable lives.
 func execDir() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -205,13 +244,28 @@ func waitForEnter(noPause bool) {
 	if noPause {
 		return
 	}
-	fmt.Println("Spauskite Enter, kad uždarytumėte.")
+	fmt.Println(texts.MsgPressEnter)
 	buf := make([]byte, 1)
 	os.Stdin.Read(buf) //nolint:errcheck
 }
 
-// domain_Day converts an EventResult DayResult into a domain.Day for storage.
-func domain_Day(eventID string, dr domain.DayResult, ev domain.Event) domain.Day {
+func askYN() bool {
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		return strings.TrimSpace(strings.ToLower(scanner.Text())) == "t"
+	}
+	return false
+}
+
+func askOverwrite() bool {
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		return strings.TrimSpace(strings.ToLower(scanner.Text())) == "p"
+	}
+	return false
+}
+
+func domainDay(eventID string, dr domain.DayResult, ev domain.Event) domain.Day {
 	return domain.Day{
 		EventID: eventID,
 		Number:  dr.DayNumber,

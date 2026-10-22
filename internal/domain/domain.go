@@ -60,3 +60,15 @@ type SearchCandidate struct {
 	SID         string // empty when the person has no profile
 	EventCount  int
 }
+
+// StoredResult is one row in the Rezultatai or Rankinis įvedimas sheet.
+type StoredResult struct {
+	SID        string
+	EventID    string
+	DayNumber  int
+	Class      string
+	Time       time.Duration
+	LeaderTime time.Duration
+	Status     string // "ok", "dsq", "dns", ...
+	Place      int
+}

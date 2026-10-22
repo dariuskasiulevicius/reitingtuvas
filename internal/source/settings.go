@@ -13,6 +13,8 @@ type Settings struct {
 	PeriodTo       time.Time     // inclusive
 	Delay          time.Duration // pause between requests
 	CacheFinalDays int           // events older than this many days are cached forever
+	OpenClassCoef  float64       // replaces Event Coefficient for "open" classes; default 0.9
+	TopN           int           // top N Day Scores for Season Score; default 8
 }
 
 // Validate checks that all required settings are present and sensible.

@@ -147,6 +147,20 @@ func ParseSettings(raw map[string]string) (*source.Settings, error) {
 		s.CacheFinalDays, _ = strconv.Atoi(v)
 	}
 
+	s.OpenClassCoef = 0.9
+	if v := raw[texts.SettingOpenClassCoef]; v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			s.OpenClassCoef = f
+		}
+	}
+
+	s.TopN = 8
+	if v := raw[texts.SettingTopN]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s.TopN = n
+		}
+	}
+
 	return s, s.Validate()
 }
 
@@ -256,6 +270,47 @@ func (wb *Workbook) AppendEvent(ev domain.Event) error {
 	return nil
 }
 
+// ReadEvents reads all events from the Varžybos sheet.
+func (wb *Workbook) ReadEvents() (map[string]domain.Event, error) {
+	rows, err := wb.f.GetRows(texts.SheetEvents)
+	if err != nil {
+		return nil, err
+	}
+	events := make(map[string]domain.Event)
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		if len(row) < 3 || strings.TrimSpace(row[0]) == "" {
+			continue
+		}
+		ev := domain.Event{ID: strings.TrimSpace(row[0])}
+		if len(row) > 1 {
+			ev.Name = strings.TrimSpace(row[1])
+		}
+		if len(row) > 2 {
+			ev.Date, _ = parseFlexDate(row[2])
+		}
+		if len(row) > 3 {
+			ev.Sport = strings.TrimSpace(row[3])
+		}
+		if len(row) > 4 {
+			ev.IsRelay = strings.TrimSpace(row[4]) == "taip"
+		}
+		if len(row) > 5 {
+			ev.DayCount, _ = strconv.Atoi(strings.TrimSpace(row[5]))
+		}
+		if len(row) > 6 {
+			c, err := strconv.ParseFloat(strings.TrimSpace(row[6]), 64)
+			if err == nil {
+				ev.Coefficient = c
+			}
+		}
+		events[ev.ID] = ev
+	}
+	return events, nil
+}
+
 // ReadCoefficients reads event ID → coefficient from the Varžybos sheet.
 func (wb *Workbook) ReadCoefficients() (map[string]float64, error) {
 	rows, err := wb.f.GetRows(texts.SheetEvents)
@@ -333,6 +388,182 @@ func (wb *Workbook) ReadDayDates() (map[string]time.Time, error) {
 	return dates, nil
 }
 
+// --- Results (Rezultatai) ---
+
+// ReadStoredResults reads rows from a results-format sheet.
+func (wb *Workbook) readResultSheet(sheet string) ([]domain.StoredResult, error) {
+	rows, err := wb.f.GetRows(sheet)
+	if err != nil {
+		return nil, err
+	}
+	headers := findHeaders(rows)
+
+	colSID := headers[texts.ColResultSID]
+	colEventID := headers[texts.ColResultEventID]
+	colDay := headers[texts.ColResultDay]
+	colClass := headers[texts.ColResultClass]
+	colTime := headers[texts.ColResultTime]
+	colLeader := headers[texts.ColResultLeaderTime]
+	colStatus := headers[texts.ColResultStatus]
+	colPlace := headers[texts.ColResultPlace]
+
+	var results []domain.StoredResult
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		sid := cellAt(row, colSID)
+		eventID := cellAt(row, colEventID)
+		if sid == "" || eventID == "" {
+			continue
+		}
+
+		r := domain.StoredResult{
+			SID:     sid,
+			EventID: eventID,
+			Class:   cellAt(row, colClass),
+			Status:  cellAt(row, colStatus),
+		}
+		if v := cellAt(row, colDay); v != "" {
+			r.DayNumber, _ = strconv.Atoi(v)
+		}
+		if r.DayNumber == 0 {
+			r.DayNumber = 1
+		}
+		if v := cellAt(row, colTime); v != "" {
+			r.Time = parseDurationCell(v)
+		}
+		if v := cellAt(row, colLeader); v != "" {
+			r.LeaderTime = parseDurationCell(v)
+		}
+		if v := cellAt(row, colPlace); v != "" {
+			r.Place, _ = strconv.Atoi(v)
+		}
+		if r.Status == "" && r.Time > 0 {
+			r.Status = "ok"
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+// ReadResults reads the Rezultatai sheet.
+func (wb *Workbook) ReadResults() ([]domain.StoredResult, error) {
+	return wb.readResultSheet(texts.SheetResults)
+}
+
+// ReadManualEntries reads the Rankinis įvedimas sheet.
+func (wb *Workbook) ReadManualEntries() ([]domain.StoredResult, error) {
+	return wb.readResultSheet(texts.SheetManualEntry)
+}
+
+// ClearAndWriteResults clears the Rezultatai sheet and writes new rows.
+func (wb *Workbook) ClearAndWriteResults(results []domain.StoredResult) error {
+	sheet := texts.SheetResults
+
+	// Delete and recreate sheet to clear all data
+	wb.f.DeleteSheet(sheet)
+	wb.f.NewSheet(sheet)
+	for i, h := range texts.ResultColumns {
+		wb.f.SetCellValue(sheet, cellName(i+1, 1), h)
+	}
+
+	for i, r := range results {
+		row := i + 2
+		wb.f.SetCellValue(sheet, cellName(1, row), r.SID)
+		wb.f.SetCellValue(sheet, cellName(2, row), r.EventID)
+		wb.f.SetCellValue(sheet, cellName(3, row), r.DayNumber)
+		wb.f.SetCellValue(sheet, cellName(4, row), r.Class)
+		if r.Time > 0 {
+			wb.f.SetCellValue(sheet, cellName(5, row), formatDuration(r.Time))
+		}
+		if r.LeaderTime > 0 {
+			wb.f.SetCellValue(sheet, cellName(6, row), formatDuration(r.LeaderTime))
+		}
+		wb.f.SetCellValue(sheet, cellName(7, row), r.Status)
+		if r.Place > 0 {
+			wb.f.SetCellValue(sheet, cellName(8, row), r.Place)
+		}
+	}
+	return nil
+}
+
+// HasResults returns true if the Rezultatai sheet has data rows.
+func (wb *Workbook) HasResults() bool {
+	rows, err := wb.f.GetRows(texts.SheetResults)
+	if err != nil {
+		return false
+	}
+	return len(rows) > 1
+}
+
+// parseDurationCell parses "h:mm:ss" or Excel day-fraction into time.Duration.
+func parseDurationCell(s string) time.Duration {
+	// Try h:mm:ss format
+	if strings.Contains(s, ":") {
+		parts := strings.Split(s, ":")
+		switch len(parts) {
+		case 3:
+			h, _ := strconv.Atoi(parts[0])
+			m, _ := strconv.Atoi(parts[1])
+			sec, _ := strconv.Atoi(parts[2])
+			return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second
+		case 2:
+			m, _ := strconv.Atoi(parts[0])
+			sec, _ := strconv.Atoi(parts[1])
+			return time.Duration(m)*time.Minute + time.Duration(sec)*time.Second
+		}
+	}
+	// Try decimal (Excel day fraction)
+	if f, err := strconv.ParseFloat(s, 64); err == nil && f > 0 && f < 1 {
+		return time.Duration(f * 86400 * float64(time.Second))
+	}
+	return 0
+}
+
+// formatDuration formats a duration as h:mm:ss.
+func formatDuration(d time.Duration) string {
+	total := int(d.Seconds())
+	h := total / 3600
+	m := (total % 3600) / 60
+	s := total % 60
+	return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+}
+
+// EventResultsToStored converts crawled EventResults into StoredResult rows.
+func EventResultsToStored(results []domain.EventResult) []domain.StoredResult {
+	var stored []domain.StoredResult
+	for _, er := range results {
+		for _, day := range er.Days {
+			if day.Status == "not entered" {
+				continue
+			}
+			stored = append(stored, domain.StoredResult{
+				SID:        er.Participant.SID,
+				EventID:    er.Event.ID,
+				DayNumber:  day.DayNumber,
+				Class:      day.Class,
+				Time:       day.Time,
+				LeaderTime: day.LeaderTime,
+				Status:     day.Status,
+				Place:      day.Place,
+			})
+		}
+	}
+	return stored
+}
+
+// LastReportSheet returns the name of the most recent report sheet, or "".
+func (wb *Workbook) LastReportSheet() string {
+	var last string
+	for _, name := range wb.f.GetSheetList() {
+		if strings.HasPrefix(name, texts.SheetReportPrefix) {
+			last = name
+		}
+	}
+	return last
+}
+
 // --- Template creation ---
 
 func (wb *Workbook) createTemplate() error {
@@ -352,10 +583,14 @@ func (wb *Workbook) createTemplate() error {
 		texts.SettingPeriodTo,
 		texts.SettingDelay,
 		texts.SettingCacheFinalDays,
+		texts.SettingOpenClassCoef,
+		texts.SettingTopN,
 	}
 	defaults := map[string]string{
 		texts.SettingDelay:          "200",
 		texts.SettingCacheFinalDays: "14",
+		texts.SettingOpenClassCoef:  "0.9",
+		texts.SettingTopN:           "8",
 	}
 	for i, key := range settingsKeys {
 		row := i + 1
@@ -381,6 +616,18 @@ func (wb *Workbook) createTemplate() error {
 	f.NewSheet(texts.SheetDays)
 	for i, h := range []string{"Varžybų ID", "Varžybos", "Diena", "Dienos pavadinimas", "Data"} {
 		f.SetCellValue(texts.SheetDays, cellName(i+1, 1), h)
+	}
+
+	// Results sheet (crawled data)
+	f.NewSheet(texts.SheetResults)
+	for i, h := range texts.ResultColumns {
+		f.SetCellValue(texts.SheetResults, cellName(i+1, 1), h)
+	}
+
+	// Manual entry sheet (same columns)
+	f.NewSheet(texts.SheetManualEntry)
+	for i, h := range texts.ResultColumns {
+		f.SetCellValue(texts.SheetManualEntry, cellName(i+1, 1), h)
 	}
 
 	return f.SaveAs(wb.path)

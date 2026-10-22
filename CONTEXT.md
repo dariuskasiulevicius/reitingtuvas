@@ -16,8 +16,12 @@ Matching a **Participant**'s surname + name to exactly one person id in the resu
 ### Events
 
 **Event**:
-One competition as identified by its own id in the results database; may span several **Days**.
+One competition as identified by its own id in a results source; may span several **Days**. Events from different sources are distinguished by a **Source** marker.
 _Avoid_: Competition, race, varžybos
+
+**Source**:
+The origin of an **Event**'s data: the primary results database, lof.lv, or manual entry. Stored per Event for traceability; does not affect scoring.
+_Avoid_: Provider, origin
 
 **Event Date**:
 Start date of an **Event** as published; decides whether the whole Event falls inside the **Period**.
@@ -76,22 +80,44 @@ One participant's part of a **Relay**, identified by its leg number.
 
 For a **Relay**, the individual terms map to the **Leg**: **Participant Result** = own Leg time, **Place** = Leg place, **Day Leader Result** = fastest time on the same Leg number in the **Class**. Team time and team place are kept only as extra information.
 
+### Manual entry
+
+**Manual Event**:
+An **Event** entered by hand in the workbook (not scraped); all data — participant time, leader time, class, date — must be provided by the user. Included in **Day Score** and **Season Score** calculation like any other Event.
+_Avoid_: Custom event, external event
+
 ### Rating and reporting
 
 **Period**:
 Inclusive date range (from–to) of **Events** included in a report; an Event is in or out as a whole, never split by Day.
 _Avoid_: Season (when meaning the date range)
 
+**Day Score**:
+Per-Day performance number for a **Participant**: `Day Leader Result / Day Result time × Event Coefficient`. Zero when **Day Status** is not `ok`.
+_Avoid_: Day coefficient, day rating, day points
+
+**Season Score**:
+Sum of a **Participant**'s top N **Day Scores** (default N=8; fewer if the Participant has fewer); determines the **Season Rating** order.
+_Avoid_: Total score, total coefficient
+
 **Season Rating**:
-Internal ranking of the **Participants**, computed from their results across **Events** in a **Period**.
+Internal ranking of the **Participants** by **Season Score**, highest first.
 _Avoid_: Ranking, standings
 
 **Event Coefficient**:
-Weight assigned to an **Event** that scales its contribution to the **Season Rating**; 1.00 unless changed manually.
+Weight assigned to an **Event** that scales its contribution to the **Season Rating**; 1.00 unless changed manually. Replaced by **Open Class Coefficient** when the participant's **Class** contains "open" (case-insensitive).
 _Avoid_: Multiplier, weight factor
 
+**Open Class Coefficient**:
+Fixed coefficient applied instead of (not multiplied by) the **Event Coefficient** when the participant's **Class** contains "open" (case-insensitive anywhere in the name); configurable in Settings (`Atviros klasės koeficientas`), default 0.9.
+_Avoid_: OPEN penalty, OPEN multiplier
+
+**Start Count**:
+Number of event-days where a **Participant** has any entry (including dsq/dns/dnf — score 0 still counts as a start); displayed in the report.
+_Avoid_: Participation count
+
 **Report**:
-Snapshot of all collected results of the **Participants** for one **Period**, produced by a single run; every run produces a new Report, older ones are kept.
+Season Rating table: one row per **Participant**, one column per event-**Day**, cell value = **Day Score**. Sorted by **Season Score** descending, ties get equal **Season Rating** place. Includes start count and top-N sum. Created as a new sheet or overwrites the previous one (user chooses). Title row contains period year.
 _Avoid_: Export, output
 
 ## Relationships
@@ -103,7 +129,7 @@ _Avoid_: Export, output
 - A **Leader Result** is the sum of one **Day Leader Result** per **Day**, always over all Days of the Event regardless of which Days the participant ran; it is not the overall Event winner's total
 - Each **Day Leader Result** comes from the **Class** the participant ran that Day; if the Class changed between Days, each Day uses its own Class
 - **Place** is never derived from **Day Places**; it is the published total only
-- A **Report** covers one **Period** and lists one row per **Participant** × **Event**
+- A **Report** covers one **Period** and lists one row per **Participant**, one column per event-**Day**
 
 ## Example dialogue
 
@@ -114,8 +140,48 @@ _Avoid_: Export, output
 > **Dev:** "Bandomasis čempionatas on Saturday and Pavyzdžio sprintas on Sunday — one Event with two Days?"
 > **Domain expert:** "No, different ids, so two **Events**, each with its own **Event Coefficient**."
 
-## Flagged ambiguities
+## Workbook sheets
 
-- Rating formula not decided yet — data collection must keep enough raw data (times, places, leader times, statuses) to support any formula later.
+| Sheet | Purpose | Written by |
+|---|---|---|
+| `Nustatymai` | Settings key-value pairs | User |
+| `Dalyviai` | Participant list (surname, name, ID, status) | User + tool (SID, status) |
+| `Varžybos` | Event metadata (ID, name, date, sport, relay, day count, coefficient) | Tool appends; user edits coefficient |
+| `Dienos` | Day metadata (event ID, event name, day #, name, date) | Tool appends; user may correct date |
+| `Rezultatai` | Crawled raw results: one row per participant × event × day | Tool (cleared & rebuilt each crawl) |
+| `Rankinis įvedimas` | Manual results: same columns as `Rezultatai` | User only |
+
+`Rezultatai` columns: Dalyvio ID, Varžybų ID, Diena, Klasė, Laikas, Lyderio laikas, Būsena, Vieta.
+`Rankinis įvedimas` columns: identical to `Rezultatai`. Manual events use user-invented IDs that must match a row in `Varžybos` for coefficient lookup.
+
+Data never flows between `Rezultatai` and `Rankinis įvedimas`. Both are read by the report generator.
+
+## Data flow
+
+1. User double-clicks exe → tool finds workbook next to itself
+2. Prompt: "Parsisiųsti duomenis iš šaltinių? (t/n)"
+3. If **t**: crawl sources → clear & rebuild `Rezultatai` → upsert `Varžybos`/`Dienos`
+4. If **n**: skip crawl, `Rezultatai` stays as-is
+5. Report reads `Rezultatai` + `Rankinis įvedimas` + `Varžybos` (coefficients) + `Nustatymai` (open class coef, top N)
+6. Compute Day Scores from raw times, sort by Season Score
+7. Prompt: "Perrašyti paskutinę ataskaitą ar sukurti naują? (p/n)"
+8. Write report sheet → backup → save
+
+## Report layout
+
+Header rows (3–6):
+- Row 3: `Vieta` | `Pavardė Vardas` | event names (1 col per day, multi-day repeats name) | `Startų skaičius` | `Geriausių N suma` | `Pavardė Vardas` | `Vieta`
+- Row 4: | `Data` | dates as `MM DD` | | | |
+- Row 5: | `Koeficientas` | coefficients (0.00) | event count | max possible score | `"koeficientas"` |
+- Row 6: | `Eilės nr.` | 1, 2, 3... | | | |
+
+Data rows: sorted by Season Score desc. Place supports ties ("7-8"). Day Score values: `0.00` format, empty = didn't participate, `0` = dsq/dns. Freeze pane at C1.
+
+Events sorted by date, days 1,2,3 within same event.
+
+## Resolved ambiguities
+
+- ~~Rating formula not decided yet~~ → **Decided**: Day Score = Leader Time / Participant Time × Coefficient. Season Score = top N (default 8) Day Scores. Season Rating = sorted by Season Score desc.
 - "Participant gets 0 for a dsq/dns day" means zero contribution in the rating calculation, not a 0 time — a 0 time would look faster than the leader. Stored data keeps the **Day Status** and no time.
 - "Season" was used both for the rating and the date range — resolved: **Season Rating** is the ranking, **Period** is the date range.
+- ~~Open class detection~~ → any class name containing "open" (case-insensitive), not just prefix.
