@@ -85,7 +85,7 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 		// Check headers beyond fixed 4 + total
 		for i := 5; i < len(hdrMap); i++ {
 			name := hdrMap[i].text
-			if name == "" || name == "min/km" {
+			if name == "" || name == "min/km" || name == "km/h" {
 				continue
 			}
 			isSingleDay = false
