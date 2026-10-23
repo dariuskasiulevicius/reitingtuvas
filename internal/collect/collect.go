@@ -388,14 +388,20 @@ func (c *Collector) buildFromPersonOnly(er domain.EventResult, pr personRow) dom
 }
 
 // findLeaderTime returns the time of the place-1 competitor (single-day).
+// Falls back to the shortest valid time when no row has Place == 1.
 func findLeaderTime(rows []parse.ClassCompetitor) time.Duration {
+	var best time.Duration
 	for _, r := range rows {
 		if r.Place == 1 {
 			_, t := parse.ParseTimeOrStatus(r.Total)
 			return t
 		}
+		_, t := parse.ParseTimeOrStatus(r.Total)
+		if t > 0 && (best == 0 || t < best) {
+			best = t
+		}
 	}
-	return 0
+	return best
 }
 
 // findDayLeaderTime returns the leader time for a specific day column.

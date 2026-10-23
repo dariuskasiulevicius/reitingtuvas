@@ -326,6 +326,85 @@ func TestParseClassPage_MultiDayPoints(t *testing.T) {
 	}
 }
 
+func TestParseClassPage_SingleDayKmh(t *testing.T) {
+	f := openFixture(t, "class_single_day_kmh.html")
+	page, err := ParseClassPage(f, profileTmpl(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.EventName != "Rudens krosas" {
+		t.Errorf("event = %q", page.EventName)
+	}
+	if len(page.DayNames) != 0 {
+		t.Errorf("day names = %v, want empty (single day)", page.DayNames)
+	}
+	if len(page.Rows) != 4 {
+		t.Fatalf("rows = %d, want 4", len(page.Rows))
+	}
+
+	// Leader (place 1)
+	leader := page.Rows[0]
+	if leader.SID != "500" {
+		t.Errorf("leader sid = %q", leader.SID)
+	}
+	if leader.Place != 1 {
+		t.Errorf("leader place = %d", leader.Place)
+	}
+	if leader.Total != "1:09:55" {
+		t.Errorf("leader total = %q", leader.Total)
+	}
+
+	// Participant (place 3)
+	p := page.Rows[2]
+	if p.SID != "772" {
+		t.Errorf("participant sid = %q", p.SID)
+	}
+	if p.Place != 3 {
+		t.Errorf("participant place = %d", p.Place)
+	}
+	if p.Total != "1:17:30" {
+		t.Errorf("participant total = %q", p.Total)
+	}
+
+	// DSQ person (no place)
+	dsq := page.Rows[3]
+	if dsq.Place != 0 {
+		t.Errorf("dsq place = %d, want 0", dsq.Place)
+	}
+	if dsq.Total != "dsq" {
+		t.Errorf("dsq total = %q", dsq.Total)
+	}
+}
+
+func TestParseClassPage_DiplomaInPlaceCell(t *testing.T) {
+	f := openFixture(t, "class_single_day_diploma_in_place.html")
+	page, err := ParseClassPage(f, profileTmpl(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.DayNames) != 0 {
+		t.Errorf("day names = %v, want empty (single day)", page.DayNames)
+	}
+	if len(page.Rows) != 4 {
+		t.Fatalf("rows = %d, want 4", len(page.Rows))
+	}
+
+	// Leader place must be parsed from div despite diploma link text
+	leader := page.Rows[0]
+	if leader.Place != 1 {
+		t.Errorf("leader place = %d, want 1", leader.Place)
+	}
+	if leader.Total != "1:09:55" {
+		t.Errorf("leader total = %q", leader.Total)
+	}
+
+	// Participant place
+	p := page.Rows[2]
+	if p.Place != 3 {
+		t.Errorf("participant place = %d, want 3", p.Place)
+	}
+}
+
 // --- Relay tests ---
 
 func TestParseRelayClassPage(t *testing.T) {

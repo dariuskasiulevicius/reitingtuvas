@@ -136,8 +136,12 @@ func ParseClassPage(r io.Reader, profileTmpl *source.Template) (*ClassPage, erro
 
 		var c ClassCompetitor
 
-		// Place
-		placeText := strings.TrimSpace(cells.Eq(0).Text())
+		// Place — extract from div if present, then parse leading digits
+		placeCell := cells.Eq(0)
+		placeText := strings.TrimSpace(placeCell.Text())
+		if div := placeCell.Find("div"); div.Length() > 0 {
+			placeText = strings.TrimSpace(div.First().Text())
+		}
 		c.Place, _ = strconv.Atoi(placeText)
 
 		// Name + SID

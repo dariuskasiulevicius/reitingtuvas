@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/domain"
+	"github.com/dariuskasiulevicius/reitingtuvas/internal/parse"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/source"
 )
 
@@ -218,5 +219,35 @@ func TestCollector_Collect(t *testing.T) {
 	}
 	if relay.Days[0].LeaderTime == 0 {
 		t.Error("relay leader time should be set")
+	}
+}
+
+func TestFindLeaderTime_Fallback(t *testing.T) {
+	// When no row has Place == 1 (e.g. place parsing failed),
+	// findLeaderTime should fall back to shortest time.
+	rows := []parse.ClassCompetitor{
+		{Place: 0, Total: "1:09:55"}, // actual leader, but place not parsed
+		{Place: 0, Total: "1:12:40"},
+		{Place: 0, Total: "1:17:30"},
+		{Place: 0, Total: "dsq"},
+	}
+
+	got := findLeaderTime(rows)
+	want := 1*time.Hour + 9*time.Minute + 55*time.Second
+	if got != want {
+		t.Errorf("findLeaderTime fallback = %v, want %v", got, want)
+	}
+}
+
+func TestFindLeaderTime_ExactPlace(t *testing.T) {
+	rows := []parse.ClassCompetitor{
+		{Place: 1, Total: "1:09:55"},
+		{Place: 2, Total: "1:12:40"},
+	}
+
+	got := findLeaderTime(rows)
+	want := 1*time.Hour + 9*time.Minute + 55*time.Second
+	if got != want {
+		t.Errorf("findLeaderTime exact = %v, want %v", got, want)
 	}
 }
