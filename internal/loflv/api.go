@@ -29,13 +29,12 @@ func unwrapResponse(body []byte) (string, error) {
 }
 
 // formData builds POST form values for a results request.
+// The API expects only two fields: txt and p, where p bundles all query params.
 // view: 1 = single event results, 99 = kopvērtējums (multi-day overall).
 func formData(eventID int, view int) url.Values {
+	p := "ev=" + strconv.Itoa(eventID) + "&t=1&r=" + strconv.Itoa(view) + "&d=0"
 	return url.Values{
 		"txt": {"1"},
-		"p":   {"ev=" + strconv.Itoa(eventID)},
-		"t":   {"1"},
-		"r":   {strconv.Itoa(view)},
-		"d":   {"0"},
+		"p":   {p},
 	}
 }

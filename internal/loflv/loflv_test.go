@@ -83,11 +83,14 @@ func TestUnwrapResponse_Empty(t *testing.T) {
 
 func TestFormData(t *testing.T) {
 	fd := formData(123, 1)
-	if fd.Get("p") != "ev=123" {
+	if fd.Get("txt") != "1" {
+		t.Fatalf("txt=%q", fd.Get("txt"))
+	}
+	if fd.Get("p") != "ev=123&t=1&r=1&d=0" {
 		t.Fatalf("p=%q", fd.Get("p"))
 	}
-	if fd.Get("r") != "1" {
-		t.Fatalf("r=%q", fd.Get("r"))
+	if fd.Get("r") != "" {
+		t.Fatal("r should not be a separate field")
 	}
 }
 
