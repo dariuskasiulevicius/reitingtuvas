@@ -114,16 +114,17 @@ func ParseMultiDayResults(html string) ([]MultiDayBlock, error) {
 				row.TotalTime = parseLVTime(raw)
 			}
 
-			// Per-day results: td.td_d1_rez + td.td_d1_vieta pairs
-			for d := 1; d <= dayCount; d++ {
+			// Per-day results: all day cells share class td_d1_rez / td_d1_vieta,
+			// so we parse positionally (index 0 = day 1, etc).
+			rezCells := tr.Find("td.td_d1_rez")
+			vietaCells := tr.Find("td.td_d1_vieta")
+			for d := 0; d < dayCount; d++ {
 				var dr DayResult
-				rezSel := tr.Find("td.td_d" + strconv.Itoa(d) + "_rez")
-				if rezSel.Length() > 0 {
-					dr.Time = parseLVTime(strings.TrimSpace(rezSel.Text()))
+				if d < rezCells.Length() {
+					dr.Time = parseLVTime(strings.TrimSpace(rezCells.Eq(d).Text()))
 				}
-				vietaSel := tr.Find("td.td_d" + strconv.Itoa(d) + "_vieta")
-				if vietaSel.Length() > 0 {
-					m := dayPlaceRe.FindStringSubmatch(vietaSel.Text())
+				if d < vietaCells.Length() {
+					m := dayPlaceRe.FindStringSubmatch(vietaCells.Eq(d).Text())
 					if m != nil {
 						dr.Place, _ = strconv.Atoi(m[1])
 					}
