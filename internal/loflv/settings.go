@@ -2,6 +2,7 @@ package loflv
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/texts"
 )
@@ -16,8 +17,8 @@ type LVSettings struct {
 // Returns nil (no error) when both keys are empty (LV disabled).
 // Returns error when exactly one key is set.
 func ParseLVSettings(raw map[string]string) (*LVSettings, error) {
-	base := raw[texts.SettingLVBaseURL]
-	series := raw[texts.SettingLVSeriesID]
+	base := strings.TrimSpace(raw[texts.SettingLVBaseURL])
+	series := strings.TrimSpace(raw[texts.SettingLVSeriesID])
 
 	if base == "" && series == "" {
 		return nil, nil
