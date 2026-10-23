@@ -10,6 +10,7 @@ import (
 
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/collect"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/domain"
+	"github.com/dariuskasiulevicius/reitingtuvas/internal/loflv"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/report"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/source"
 	"github.com/dariuskasiulevicius/reitingtuvas/internal/texts"
@@ -67,6 +68,11 @@ func main() {
 	settings, err := workbook.ParseSettings(rawSettings)
 	if err != nil {
 		exitWithError(fmt.Sprintf("Nustatymai: %v", err), *noPause)
+	}
+
+	lvSettings, err := loflv.ParseLVSettings(rawSettings)
+	if err != nil {
+		exitWithError(fmt.Sprintf("LV nustatymai: %v", err), *noPause)
 	}
 
 	fmt.Printf("Laikotarpis: %s — %s\n",
@@ -166,19 +172,72 @@ func main() {
 			exitWithError(fmt.Sprintf("Rezultatai: %v", err), *noPause)
 		}
 		fmt.Printf("Rezultatai įrašyti: %d eilučių\n", len(stored))
+
+		// LV collection
+		if lvSettings.Enabled() {
+			fmt.Println("\nRenkami LV rezultatai...")
+			lvClient := source.NewClient(lvSettings.BaseURL, settings.Delay, cache, settings.CacheFinalDays, version)
+
+			lvProgress := func(current, total int, desc string) {
+				fmt.Printf("\r[%d/%d] LV: %s          ", current, total, desc)
+			}
+
+			lvColl := loflv.NewCollector(lvClient, lvSettings, settings, lvProgress)
+			lvResults, lvWarnings := lvColl.Collect(participants)
+			lvStats := lvClient.Stats
+			fmt.Printf("\nLV surinkta: %d rezultatų\n", len(lvResults))
+			fmt.Printf("LV užklausos: %d, iš talpyklos: %d, klaidos: %d\n",
+				lvStats.Requests, lvStats.CacheHits, lvStats.Errors)
+
+			if len(lvWarnings) > 0 {
+				fmt.Printf("LV įspėjimai: %d\n", len(lvWarnings))
+				for _, w := range lvWarnings {
+					fmt.Printf("  ! %s\n", w)
+				}
+			}
+
+			// Upsert LV events + days
+			for _, r := range lvResults {
+				if seenEvents[r.Event.ID] {
+					continue
+				}
+				seenEvents[r.Event.ID] = true
+
+				if !existingEvents[r.Event.ID] {
+					ev := r.Event
+					if ev.Coefficient == 0 {
+						ev.Coefficient = 1.00
+					}
+					wb.AppendEvent(ev)
+
+					for _, d := range r.Days {
+						wb.AppendDay(domainDay(r.Event.ID, d, r.Event), r.Event.Name)
+					}
+				}
+			}
+
+			// Write LV results to separate sheet
+			lvStored := workbook.EventResultsToStored(lvResults)
+			if err := wb.ClearAndWriteResultsLV(lvStored); err != nil {
+				exitWithError(fmt.Sprintf("Rezultatai-LV: %v", err), *noPause)
+			}
+			fmt.Printf("LV rezultatai įrašyti: %d eilučių\n", len(lvStored))
+		}
 	}
 
-	// Read all results (Rezultatai + Rankinis)
+	// Read all results (Rezultatai + Rezultatai-LV + Rankinis)
 	rezultatai, _ := wb.ReadResults()
+	rezultataiLV, _ := wb.ReadResultsLV()
 	rankinis, _ := wb.ReadManualEntries()
-	allResults := append(rezultatai, rankinis...)
+	allResults := append(rezultatai, rezultataiLV...)
+	allResults = append(allResults, rankinis...)
 
 	if len(allResults) == 0 {
 		exitWithError(texts.MsgNoResults, *noPause)
 	}
 
-	fmt.Printf("Rezultatai ataskaitai: %d (automatiniai: %d, rankiniai: %d)\n",
-		len(allResults), len(rezultatai), len(rankinis))
+	fmt.Printf("Rezultatai ataskaitai: %d (LT: %d, LV: %d, rankiniai: %d)\n",
+		len(allResults), len(rezultatai), len(rezultataiLV), len(rankinis))
 
 	// Read coefficients + events
 	coefficients, _ := wb.ReadCoefficients()

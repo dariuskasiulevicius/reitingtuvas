@@ -8,6 +8,7 @@ const (
 	SheetEvents       = "Varžybos"
 	SheetDays         = "Dienos"
 	SheetResults      = "Rezultatai"
+	SheetResultsLV    = "Rezultatai-LV"
 	SheetManualEntry  = "Rankinis įvedimas"
 	SheetReportPrefix = "Ataskaita"
 )
@@ -26,6 +27,8 @@ const (
 	SettingCacheFinalDays = "Rezultatai galutiniai po, d."
 	SettingOpenClassCoef  = "Atviros klasės koeficientas"
 	SettingTopN           = "Geriausių dienų skaičius"
+	SettingLVBaseURL      = "LV šaltinio adresas"
+	SettingLVSeriesID     = "LV serijos ID"
 )
 
 // Participant columns.

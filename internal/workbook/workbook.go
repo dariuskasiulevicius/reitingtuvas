@@ -452,6 +452,11 @@ func (wb *Workbook) ReadResults() ([]domain.StoredResult, error) {
 	return wb.readResultSheet(texts.SheetResults)
 }
 
+// ReadResultsLV reads the Rezultatai-LV sheet.
+func (wb *Workbook) ReadResultsLV() ([]domain.StoredResult, error) {
+	return wb.readResultSheet(texts.SheetResultsLV)
+}
+
 // ReadManualEntries reads the Rankinis įvedimas sheet.
 func (wb *Workbook) ReadManualEntries() ([]domain.StoredResult, error) {
 	return wb.readResultSheet(texts.SheetManualEntry)
@@ -459,9 +464,15 @@ func (wb *Workbook) ReadManualEntries() ([]domain.StoredResult, error) {
 
 // ClearAndWriteResults clears the Rezultatai sheet and writes new rows.
 func (wb *Workbook) ClearAndWriteResults(results []domain.StoredResult) error {
-	sheet := texts.SheetResults
+	return wb.clearAndWriteResultSheet(texts.SheetResults, results)
+}
 
-	// Delete and recreate sheet to clear all data
+// ClearAndWriteResultsLV clears the Rezultatai-LV sheet and writes new rows.
+func (wb *Workbook) ClearAndWriteResultsLV(results []domain.StoredResult) error {
+	return wb.clearAndWriteResultSheet(texts.SheetResultsLV, results)
+}
+
+func (wb *Workbook) clearAndWriteResultSheet(sheet string, results []domain.StoredResult) error {
 	wb.f.DeleteSheet(sheet)
 	wb.f.NewSheet(sheet)
 	for i, h := range texts.ResultColumns {
@@ -585,6 +596,8 @@ func (wb *Workbook) createTemplate() error {
 		texts.SettingCacheFinalDays,
 		texts.SettingOpenClassCoef,
 		texts.SettingTopN,
+		texts.SettingLVBaseURL,
+		texts.SettingLVSeriesID,
 	}
 	defaults := map[string]string{
 		texts.SettingDelay:          "200",
@@ -622,6 +635,12 @@ func (wb *Workbook) createTemplate() error {
 	f.NewSheet(texts.SheetResults)
 	for i, h := range texts.ResultColumns {
 		f.SetCellValue(texts.SheetResults, cellName(i+1, 1), h)
+	}
+
+	// LV results sheet (same columns, separate sheet)
+	f.NewSheet(texts.SheetResultsLV)
+	for i, h := range texts.ResultColumns {
+		f.SetCellValue(texts.SheetResultsLV, cellName(i+1, 1), h)
 	}
 
 	// Manual entry sheet (same columns)

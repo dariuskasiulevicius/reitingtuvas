@@ -1,9 +1,12 @@
 package source
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -93,6 +96,75 @@ func (c *Client) Fetch(path string, eventDate time.Time, alwaysFresh bool) Fetch
 
 	c.Stats.Errors++
 	return FetchResult{Error: fmt.Errorf("after 3 attempts: %w", lastErr)}
+}
+
+// Post fetches via HTTP POST with form data, using cache and retry logic.
+func (c *Client) Post(path string, formData url.Values, eventDate time.Time, alwaysFresh bool) FetchResult {
+	fullURL := c.baseURL + path
+	cacheKey := postCacheKey(fullURL, formData)
+
+	if c.cache != nil {
+		if body, ok := c.cache.GetByKey(cacheKey, eventDate, c.finalDays, alwaysFresh); ok {
+			c.Stats.CacheHits++
+			return FetchResult{Body: body, FromCache: true}
+		}
+	}
+
+	c.waitDelay()
+
+	var lastErr error
+	for attempt, backoff := range c.backoffs {
+		if attempt > 0 {
+			time.Sleep(backoff)
+		}
+		c.Stats.Requests++
+		body, err := c.doPost(fullURL, formData)
+		if err == nil {
+			if c.cache != nil {
+				_ = c.cache.PutByKey(cacheKey, fullURL+"|POST", body)
+			}
+			return FetchResult{Body: body}
+		}
+		lastErr = err
+	}
+
+	c.Stats.Errors++
+	return FetchResult{Error: fmt.Errorf("after 3 attempts: %w", lastErr)}
+}
+
+func (c *Client) doPost(rawURL string, formData url.Values) ([]byte, error) {
+	req, err := http.NewRequest("POST", rawURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	c.lastFetch = time.Now()
+	return body, nil
+}
+
+func postCacheKey(rawURL string, formData url.Values) string {
+	h := sha256.Sum256([]byte(rawURL + "|POST|" + formData.Encode()))
+	return fmt.Sprintf("%x", h)
 }
 
 func (c *Client) doRequest(url string) ([]byte, error) {

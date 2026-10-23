@@ -35,11 +35,15 @@ func NewCache(dir string) (*Cache, error) {
 // For pages that should always be re-fetched (search, person results),
 // pass alwaysFresh=true.
 func (c *Cache) Get(url string, eventDate time.Time, finalDays int, alwaysFresh bool) ([]byte, bool) {
+	return c.GetByKey(c.key(url), eventDate, finalDays, alwaysFresh)
+}
+
+// GetByKey is like Get but accepts a pre-computed cache key (for POST requests).
+func (c *Cache) GetByKey(key string, eventDate time.Time, finalDays int, alwaysFresh bool) ([]byte, bool) {
 	if alwaysFresh {
 		return nil, false
 	}
 
-	key := c.key(url)
 	metaPath := filepath.Join(c.dir, key+".json")
 	bodyPath := filepath.Join(c.dir, key+".html")
 
@@ -69,10 +73,13 @@ func (c *Cache) Get(url string, eventDate time.Time, finalDays int, alwaysFresh 
 
 // Put stores a response body in the cache.
 func (c *Cache) Put(url string, body []byte) error {
-	key := c.key(url)
+	return c.PutByKey(c.key(url), url, body)
+}
 
+// PutByKey stores a response body under a pre-computed cache key.
+func (c *Cache) PutByKey(key, label string, body []byte) error {
 	entry := CacheEntry{
-		URL:       url,
+		URL:       label,
 		FetchedAt: time.Now(),
 	}
 	metaBytes, err := json.Marshal(entry)
@@ -90,6 +97,11 @@ func (c *Cache) Put(url string, body []byte) error {
 		return fmt.Errorf("write cache meta: %w", err)
 	}
 	return nil
+}
+
+// Key computes the cache key for a URL.
+func (c *Cache) Key(url string) string {
+	return c.key(url)
 }
 
 func (c *Cache) key(url string) string {
