@@ -483,17 +483,24 @@ func (wb *Workbook) clearAndWriteResultSheet(sheet string, results []domain.Stor
 		row := i + 2
 		wb.f.SetCellValue(sheet, cellName(1, row), r.SID)
 		wb.f.SetCellValue(sheet, cellName(2, row), r.EventID)
-		wb.f.SetCellValue(sheet, cellName(3, row), r.DayNumber)
-		wb.f.SetCellValue(sheet, cellName(4, row), r.Class)
+		wb.f.SetCellValue(sheet, cellName(3, row), r.ParticipantName)
+		wb.f.SetCellValue(sheet, cellName(4, row), r.EventName)
+		wb.f.SetCellValue(sheet, cellName(5, row), r.DayNumber)
+		wb.f.SetCellValue(sheet, cellName(6, row), r.Class)
 		if r.Time > 0 {
-			wb.f.SetCellValue(sheet, cellName(5, row), formatDuration(r.Time))
+			wb.f.SetCellValue(sheet, cellName(7, row), formatDuration(r.Time))
 		}
 		if r.LeaderTime > 0 {
-			wb.f.SetCellValue(sheet, cellName(6, row), formatDuration(r.LeaderTime))
+			wb.f.SetCellValue(sheet, cellName(8, row), formatDuration(r.LeaderTime))
 		}
-		wb.f.SetCellValue(sheet, cellName(7, row), r.Status)
+		wb.f.SetCellValue(sheet, cellName(9, row), r.Status)
 		if r.Place > 0 {
-			wb.f.SetCellValue(sheet, cellName(8, row), r.Place)
+			wb.f.SetCellValue(sheet, cellName(10, row), r.Place)
+		}
+		if r.Link != "" {
+			c := cellName(11, row)
+			wb.f.SetCellValue(sheet, c, r.Link)
+			wb.f.SetCellHyperLink(sheet, c, r.Link, "External")
 		}
 	}
 	return nil
@@ -542,22 +549,38 @@ func formatDuration(d time.Duration) string {
 }
 
 // EventResultsToStored converts crawled EventResults into StoredResult rows.
-func EventResultsToStored(results []domain.EventResult) []domain.StoredResult {
+// baseURL and classTemplate are used to construct clickable links; pass "" and nil to omit.
+func EventResultsToStored(results []domain.EventResult, baseURL string, classTemplate *source.Template) []domain.StoredResult {
 	var stored []domain.StoredResult
 	for _, er := range results {
+		participantName := er.Participant.Surname + " " + er.Participant.Name
 		for _, day := range er.Days {
 			if day.Status == "not entered" {
 				continue
 			}
+			var link string
+			if baseURL != "" && classTemplate != nil {
+				path, err := classTemplate.Expand(map[string]string{
+					"event": er.Event.ID,
+					"class": day.Class,
+					"day":   strconv.Itoa(day.DayNumber),
+				})
+				if err == nil {
+					link = baseURL + path
+				}
+			}
 			stored = append(stored, domain.StoredResult{
-				SID:        er.Participant.SID,
-				EventID:    er.Event.ID,
-				DayNumber:  day.DayNumber,
-				Class:      day.Class,
-				Time:       day.Time,
-				LeaderTime: day.LeaderTime,
-				Status:     day.Status,
-				Place:      day.Place,
+				SID:             er.Participant.SID,
+				EventID:         er.Event.ID,
+				ParticipantName: participantName,
+				EventName:       er.Event.Name,
+				DayNumber:       day.DayNumber,
+				Class:           day.Class,
+				Time:            day.Time,
+				LeaderTime:      day.LeaderTime,
+				Status:          day.Status,
+				Place:           day.Place,
+				Link:            link,
 			})
 		}
 	}

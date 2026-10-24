@@ -54,6 +54,10 @@ func WriteReport(
 
 	// Styles
 	scoreStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: strPtr("0.00")})
+	boldScoreStyle, _ := f.NewStyle(&excelize.Style{
+		CustomNumFmt: strPtr("0.00"),
+		Font:         &excelize.Font{Bold: true},
+	})
 	coefStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: strPtr("0.00")})
 	boldStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
 
@@ -148,11 +152,16 @@ func WriteReport(
 		f.SetCellValue(sheetName, cell(1, row), entry.Place)
 		f.SetCellValue(sheetName, cell(2, row), displayName)
 
+		topKeys := domain.TopNDayKeys(entry.DayScores, topN)
 		for j, col := range columns {
 			if score, ok := entry.DayScores[col.Key]; ok {
 				c := cell(eventColStart+j, row)
 				f.SetCellValue(sheetName, c, roundTo2(score))
-				f.SetCellStyle(sheetName, c, c, scoreStyle)
+				if topKeys[col.Key] {
+					f.SetCellStyle(sheetName, c, c, boldScoreStyle)
+				} else {
+					f.SetCellStyle(sheetName, c, c, scoreStyle)
+				}
 			}
 		}
 

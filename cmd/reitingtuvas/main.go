@@ -167,7 +167,7 @@ func main() {
 		}
 
 		// Clear + write Rezultatai
-		stored := workbook.EventResultsToStored(crawled)
+		stored := workbook.EventResultsToStored(crawled, settings.BaseURL, settings.Templates.Class)
 		if err := wb.ClearAndWriteResults(stored); err != nil {
 			exitWithError(fmt.Sprintf("Rezultatai: %v", err), *noPause)
 		}
@@ -217,7 +217,7 @@ func main() {
 			}
 
 			// Write LV results to separate sheet
-			lvStored := workbook.EventResultsToStored(lvResults)
+			lvStored := workbook.EventResultsToStored(lvResults, "", nil)
 			if err := wb.ClearAndWriteResultsLV(lvStored); err != nil {
 				exitWithError(fmt.Sprintf("Rezultatai-LV: %v", err), *noPause)
 			}

@@ -58,20 +58,24 @@ var DayStatusDisplay = map[string]string{
 
 // Results sheet columns (shared by Rezultatai and Rankinis įvedimas).
 const (
-	ColResultSID        = "Dalyvio ID"
-	ColResultEventID    = "Varžybų ID"
-	ColResultDay        = "Diena"
-	ColResultClass      = "Grupė"
-	ColResultTime       = "Laikas"
-	ColResultLeaderTime = "Lyderio laikas"
-	ColResultStatus     = "Būsena"
-	ColResultPlace      = "Vieta"
+	ColResultSID         = "Dalyvio ID"
+	ColResultEventID     = "Varžybų ID"
+	ColResultParticipant = "Dalyvis"
+	ColResultEventName   = "Varžybos"
+	ColResultDay         = "Diena"
+	ColResultClass       = "Grupė"
+	ColResultTime        = "Laikas"
+	ColResultLeaderTime  = "Lyderio laikas"
+	ColResultStatus      = "Būsena"
+	ColResultPlace       = "Vieta"
+	ColResultLink        = "Nuoroda"
 )
 
 // ResultColumns is the ordered header for Rezultatai / Rankinis įvedimas.
 var ResultColumns = []string{
-	ColResultSID, ColResultEventID, ColResultDay, ColResultClass,
-	ColResultTime, ColResultLeaderTime, ColResultStatus, ColResultPlace,
+	ColResultSID, ColResultEventID, ColResultParticipant, ColResultEventName,
+	ColResultDay, ColResultClass, ColResultTime, ColResultLeaderTime,
+	ColResultStatus, ColResultPlace, ColResultLink,
 }
 
 // Report headers.

@@ -62,6 +62,62 @@ func TestDayResult_DsqHasNoTime(t *testing.T) {
 	}
 }
 
+func TestTopNDayKeys(t *testing.T) {
+	scores := map[string]float64{
+		"a:1": 0.90,
+		"b:1": 0.80,
+		"c:1": 0.70,
+		"d:1": 0.60,
+		"e:1": 0.50,
+	}
+	got := TopNDayKeys(scores, 3)
+	if len(got) != 3 {
+		t.Fatalf("got %d keys, want 3", len(got))
+	}
+	for _, k := range []string{"a:1", "b:1", "c:1"} {
+		if !got[k] {
+			t.Errorf("missing key %s", k)
+		}
+	}
+}
+
+func TestTopNDayKeys_Ties(t *testing.T) {
+	scores := map[string]float64{
+		"a:1": 0.90,
+		"b:1": 0.80,
+		"c:1": 0.80, // tie at boundary
+		"d:1": 0.60,
+	}
+	got := TopNDayKeys(scores, 2)
+	// threshold=0.80 → all with >=0.80 included (a, b, c)
+	if len(got) != 3 {
+		t.Fatalf("got %d keys, want 3 (ties)", len(got))
+	}
+}
+
+func TestTopNDayKeys_FewerThanN(t *testing.T) {
+	scores := map[string]float64{
+		"a:1": 0.90,
+		"b:1": 0.80,
+	}
+	got := TopNDayKeys(scores, 8)
+	if len(got) != 2 {
+		t.Fatalf("got %d keys, want 2", len(got))
+	}
+}
+
+func TestTopNDayKeys_ZeroScoresExcluded(t *testing.T) {
+	scores := map[string]float64{
+		"a:1": 0.90,
+		"b:1": 0.0,
+		"c:1": 0.0,
+	}
+	got := TopNDayKeys(scores, 3)
+	if len(got) != 1 {
+		t.Fatalf("got %d keys, want 1 (zero excluded)", len(got))
+	}
+}
+
 func TestEstimateDayDate(t *testing.T) {
 	base := time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC)
 	tests := []struct {

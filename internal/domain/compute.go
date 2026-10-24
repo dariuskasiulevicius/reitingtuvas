@@ -64,6 +64,35 @@ func ComputeSeasonScore(scores []float64, topN int) float64 {
 	return sum
 }
 
+// TopNDayKeys returns the set of day keys whose scores are in the top N.
+// Ties at the boundary are all included.
+func TopNDayKeys(scores map[string]float64, topN int) map[string]bool {
+	if len(scores) == 0 || topN <= 0 {
+		return nil
+	}
+
+	vals := make([]float64, 0, len(scores))
+	for _, v := range scores {
+		vals = append(vals, v)
+	}
+	sort.Float64s(vals)
+
+	// threshold = the Nth value from the top
+	idx := len(vals) - topN
+	if idx < 0 {
+		idx = 0
+	}
+	threshold := vals[idx]
+
+	result := make(map[string]bool)
+	for k, v := range scores {
+		if v >= threshold && v > 0 {
+			result[k] = true
+		}
+	}
+	return result
+}
+
 // RatingEntry is one row in the Season Rating.
 type RatingEntry struct {
 	SID         string
