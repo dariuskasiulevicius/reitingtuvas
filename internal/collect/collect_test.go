@@ -36,8 +36,12 @@ func fakeServer(t *testing.T) *httptest.Server {
 			w.Write(fixture(t, "class_single_day.html"))
 		case contains(path, "/e/2026058/class/BM55?day=0"):
 			w.Write(fixture(t, "class_multi_day.html"))
+		case contains(path, "/e/2026094/class/DV65?day=1"):
+			w.Write(fixture(t, "class_3day_day1.html"))
+		case contains(path, "/e/2026094/class/DV65?day=2"):
+			w.Write(fixture(t, "class_3day_day2.html"))
 		case contains(path, "/e/2026094/class/DV65?day=3"):
-			w.Write(fixture(t, "class_3day_dsq.html"))
+			w.Write(fixture(t, "class_3day_day3.html"))
 		case contains(path, "/e/2026115/class/DV65?day=1"):
 			// Single day dsq event — return a minimal single-day page
 			w.Write(fixture(t, "class_single_day.html"))
@@ -175,29 +179,55 @@ func TestCollector_Collect(t *testing.T) {
 		t.Error("leader result should be non-zero for multi-day")
 	}
 
-	// Check 3-day dsq event (2026094)
-	var dsqEvent *domain.EventResult
+	// Check 3-day per-day event (2026094)
+	var perDay *domain.EventResult
 	for i := range results {
 		if results[i].Event.ID == "2026094" {
-			dsqEvent = &results[i]
+			perDay = &results[i]
 			break
 		}
 	}
-	if dsqEvent == nil {
-		t.Fatal("3-day dsq event 2026094 not found")
+	if perDay == nil {
+		t.Fatal("3-day event 2026094 not found")
 	}
-	if len(dsqEvent.Days) != 3 {
-		t.Fatalf("3-day has %d days", len(dsqEvent.Days))
+	if len(perDay.Days) != 3 {
+		t.Fatalf("3-day has %d days", len(perDay.Days))
 	}
-	if dsqEvent.Days[2].Status != "dsq" {
-		t.Errorf("day 3 status = %q, want dsq", dsqEvent.Days[2].Status)
+	// Day 1: 30:55, place 3, leader 28:00
+	if perDay.Days[0].Status != "ok" {
+		t.Errorf("day 1 status = %q, want ok", perDay.Days[0].Status)
 	}
-	if dsqEvent.Days[2].Time != 0 {
+	if perDay.Days[0].Time != 30*time.Minute+55*time.Second {
+		t.Errorf("day 1 time = %v", perDay.Days[0].Time)
+	}
+	if perDay.Days[0].Place != 3 {
+		t.Errorf("day 1 place = %d, want 3", perDay.Days[0].Place)
+	}
+	if perDay.Days[0].LeaderTime != 28*time.Minute {
+		t.Errorf("day 1 leader = %v, want 28m", perDay.Days[0].LeaderTime)
+	}
+	// Day 2: 55:16, place 7, leader 50:00
+	if perDay.Days[1].Status != "ok" {
+		t.Errorf("day 2 status = %q, want ok", perDay.Days[1].Status)
+	}
+	if perDay.Days[1].Time != 55*time.Minute+16*time.Second {
+		t.Errorf("day 2 time = %v", perDay.Days[1].Time)
+	}
+	if perDay.Days[1].Place != 7 {
+		t.Errorf("day 2 place = %d, want 7", perDay.Days[1].Place)
+	}
+	if perDay.Days[1].LeaderTime != 50*time.Minute {
+		t.Errorf("day 2 leader = %v, want 50m", perDay.Days[1].LeaderTime)
+	}
+	// Day 3: dsq, leader 45:00
+	if perDay.Days[2].Status != "dsq" {
+		t.Errorf("day 3 status = %q, want dsq", perDay.Days[2].Status)
+	}
+	if perDay.Days[2].Time != 0 {
 		t.Error("dsq day should have zero time")
 	}
-	// Leader time should still be set for dsq day
-	if dsqEvent.Days[2].LeaderTime == 0 {
-		t.Error("dsq day leader time should still be set")
+	if perDay.Days[2].LeaderTime != 45*time.Minute {
+		t.Errorf("day 3 leader = %v, want 45m", perDay.Days[2].LeaderTime)
 	}
 
 	// Check relay event (2026111)

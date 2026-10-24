@@ -4,6 +4,7 @@ package collect
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -154,6 +155,18 @@ func (c *Collector) Collect(participants []domain.Participant) ([]domain.EventRe
 			dayView = vals["day"]
 		}
 
+		// Multi-day without total view: plan one fetch per day
+		if len(pr.row.DayLabels) > 1 && dayView != "0" && !pr.row.IsRelay {
+			for d := 1; d <= len(pr.row.DayLabels); d++ {
+				dv := strconv.Itoa(d)
+				key := classKey{eventID: pr.row.EventID, class: pr.row.Class, dayView: dv}
+				if _, ok := planned[key]; !ok {
+					planned[key] = fetchPlan{key: key, eventDate: pr.row.Date, isRelay: false}
+				}
+			}
+			continue
+		}
+
 		key := classKey{
 			eventID: pr.row.EventID,
 			class:   pr.row.Class,
@@ -222,17 +235,15 @@ func (c *Collector) Collect(participants []domain.Participant) ([]domain.EventRe
 		if vals != nil {
 			dayView = vals["day"]
 		}
-		key := classKey{eventID: pr.row.EventID, class: pr.row.Class, dayView: dayView}
-		cd := classResults[key]
 
-		er := c.buildEventResult(pr, cd, &warnings)
+		er := c.buildEventResult(pr, dayView, classResults, &warnings)
 		results = append(results, er)
 	}
 
 	return results, warnings
 }
 
-func (c *Collector) buildEventResult(pr personRow, cd classData, warnings *[]string) domain.EventResult {
+func (c *Collector) buildEventResult(pr personRow, dayView string, allClass map[classKey]classData, warnings *[]string) domain.EventResult {
 	row := pr.row
 
 	er := domain.EventResult{
@@ -248,12 +259,16 @@ func (c *Collector) buildEventResult(pr personRow, cd classData, warnings *[]str
 		Place: row.Place,
 	}
 
+	key := classKey{eventID: row.EventID, class: row.Class, dayView: dayView}
+	cd := allClass[key]
+
 	if row.IsRelay {
 		er = c.buildRelayResult(er, pr, cd)
+	} else if len(row.DayLabels) > 1 && dayView != "0" && !row.IsRelay {
+		er = c.buildPerDayResult(er, pr, allClass)
 	} else if cd.page != nil {
 		er = c.buildClassResult(er, pr, cd.page)
 	} else {
-		// No class data — use person page data only
 		er = c.buildFromPersonOnly(er, pr)
 		er.Notes = appendNote(er.Notes, "klasės puslapis nepasiekiamas")
 	}
@@ -320,6 +335,38 @@ func (c *Collector) buildClassResult(er domain.EventResult, pr personRow, page *
 
 			er.Days = append(er.Days, dr)
 		}
+	}
+	return er
+}
+
+func (c *Collector) buildPerDayResult(er domain.EventResult, pr personRow, allClass map[classKey]classData) domain.EventResult {
+	for i := range pr.row.DayLabels {
+		dayNum := i + 1
+		dr := domain.DayResult{DayNumber: dayNum, Class: pr.row.Class}
+
+		// Participant time/place from person page DayTimes
+		if i < len(pr.row.DayTimes) {
+			timeStr, place := parse.ParseDayTimeAndPlace(pr.row.DayTimes[i])
+			status, t := parse.ParseTimeOrStatus(timeStr)
+			dr.Status = status
+			dr.Time = t
+			dr.Place = place
+		}
+		if dr.Status == "" {
+			dr.Status = "not entered"
+		}
+
+		// Leader time from per-day class page
+		dayKey := classKey{
+			eventID: pr.row.EventID,
+			class:   pr.row.Class,
+			dayView: strconv.Itoa(dayNum),
+		}
+		if cd, ok := allClass[dayKey]; ok && cd.page != nil {
+			dr.LeaderTime = findLeaderTime(cd.page.Rows)
+		}
+
+		er.Days = append(er.Days, dr)
 	}
 	return er
 }
