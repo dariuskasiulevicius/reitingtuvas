@@ -496,3 +496,21 @@ func TestParseDayTimeAndPlace(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanTimeCell_SplitTimeLinks(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{`30:55&nbsp;(&nbsp;&nbsp;3)&nbsp;<a href="/en/varz/2026094/israsas/99/0/1" class="w3-text-green"><abbr title="Split times">S</abbr></a>`, "30:55 (  3)"},
+		{`dsq&nbsp;<a href="/en/varz/2026094/israsas/99/0/3" class="w3-text-green"><abbr title="Split times">S</abbr></a>`, "dsq"},
+		{`1:14:36&nbsp;(&nbsp;&nbsp;7)&nbsp;`, "1:14:36 (  7)"},
+		{`<a href="/en/varz/2026172/israsas/50/0/1" class="w3-text-green"><abbr title="Split times">S</abbr></a>`, ""},
+	}
+	for _, tt := range tests {
+		got := cleanTimeCell(tt.input)
+		if got != tt.want {
+			t.Errorf("cleanTimeCell(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}

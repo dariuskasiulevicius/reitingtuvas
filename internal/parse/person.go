@@ -124,11 +124,13 @@ func splitByBr(html string) []string {
 // cleanTimeCell removes HTML tags, nbsp, split time links, and trims whitespace
 // from a per-day time cell. Returns e.g. "1:14:36( 7)" or "dsq".
 func cleanTimeCell(s string) string {
-	// Remove <a> tags (split time links)
-	re := regexp.MustCompile(`<[^>]+>`)
-	s = re.ReplaceAllString(s, "")
+	s = linkRegex.ReplaceAllString(s, "")
+	s = tagRegex.ReplaceAllString(s, "")
 	s = strings.ReplaceAll(s, "&nbsp;", " ")
 	s = strings.ReplaceAll(s, "\u00a0", " ")
 	s = strings.TrimSpace(s)
 	return s
 }
+
+var linkRegex = regexp.MustCompile(`(?i)<a\b[^>]*>.*?</a>`)
+var tagRegex = regexp.MustCompile(`<[^>]+>`)
