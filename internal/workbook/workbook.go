@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -457,9 +458,182 @@ func (wb *Workbook) ReadResultsLV() ([]domain.StoredResult, error) {
 	return wb.readResultSheet(texts.SheetResultsLV)
 }
 
-// ReadManualEntries reads the Rankinis įvedimas sheet.
-func (wb *Workbook) ReadManualEntries() ([]domain.StoredResult, error) {
-	return wb.readResultSheet(texts.SheetManualEntry)
+// ReadManualEntries reads the simplified Rankinis įvedimas sheet,
+// resolves participant names against the Dalyviai list,
+// generates event IDs and day numbers, and returns StoredResults
+// plus discovered Events and Days for auto-registration.
+func (wb *Workbook) ReadManualEntries(participants []domain.Participant) ([]domain.StoredResult, []domain.Event, []domain.Day, []string) {
+	rows, err := wb.f.GetRows(texts.SheetManualEntry)
+	if err != nil || len(rows) <= 1 {
+		return nil, nil, nil, nil
+	}
+	headers := findHeaders(rows)
+
+	colEvent := headers[texts.ColManualEvent]
+	colDate := headers[texts.ColManualDate]
+	colName := headers[texts.ColManualName]
+	colTime := headers[texts.ColManualTime]
+	colLeader := headers[texts.ColManualLeader]
+	colOpen := headers[texts.ColManualOpen]
+	colDsq := headers[texts.ColManualDsq]
+
+	// Build name→SID lookup (both orderings, lowercased)
+	nameLookup := make(map[string]string)
+	for _, p := range participants {
+		if p.SID == "" {
+			continue
+		}
+		fwd := strings.ToLower(p.Surname + " " + p.Name)
+		rev := strings.ToLower(p.Name + " " + p.Surname)
+		nameLookup[fwd] = p.SID
+		nameLookup[rev] = p.SID
+	}
+
+	type rawRow struct {
+		eventName  string
+		date       time.Time
+		fullName   string
+		dur        time.Duration
+		leaderDur  time.Duration
+		isOpen     bool
+		isDsq      bool
+	}
+
+	var parsed []rawRow
+	var warnings []string
+
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		eventName := cellAt(row, colEvent)
+		fullName := cellAt(row, colName)
+		if eventName == "" || fullName == "" {
+			continue
+		}
+
+		dateStr := cellAt(row, colDate)
+		date, dateErr := parseFlexDate(dateStr)
+		if dateErr != nil {
+			warnings = append(warnings, fmt.Sprintf("Rankinis eil. %d: %v", i+1, dateErr))
+			continue
+		}
+
+		parsed = append(parsed, rawRow{
+			eventName: eventName,
+			date:      date,
+			fullName:  fullName,
+			dur:       parseDurationCell(cellAt(row, colTime)),
+			leaderDur: parseDurationCell(cellAt(row, colLeader)),
+			isOpen:    cellAt(row, colOpen) != "",
+			isDsq:     cellAt(row, colDsq) != "",
+		})
+	}
+
+	if len(parsed) == 0 {
+		return nil, nil, nil, warnings
+	}
+
+	// Group by event name → sorted unique dates → day numbers
+	type eventInfo struct {
+		dates    []time.Time
+		earliest time.Time
+	}
+	eventMap := make(map[string]*eventInfo)
+	for _, r := range parsed {
+		ei, ok := eventMap[r.eventName]
+		if !ok {
+			ei = &eventInfo{earliest: r.date}
+			eventMap[r.eventName] = ei
+		}
+		if r.date.Before(ei.earliest) {
+			ei.earliest = r.date
+		}
+		// Collect unique dates
+		found := false
+		for _, d := range ei.dates {
+			if d.Equal(r.date) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ei.dates = append(ei.dates, r.date)
+		}
+	}
+	// Sort dates per event → day number = index+1
+	dayNumberFor := make(map[string]map[string]int) // eventName → dateStr → dayNum
+	for name, ei := range eventMap {
+		sort.Slice(ei.dates, func(i, j int) bool { return ei.dates[i].Before(ei.dates[j]) })
+		m := make(map[string]int)
+		for i, d := range ei.dates {
+			m[d.Format("2006-01-02")] = i + 1
+		}
+		dayNumberFor[name] = m
+	}
+
+	// Build results, events, days
+	var results []domain.StoredResult
+	seenEvents := make(map[string]bool)
+	seenDays := make(map[string]bool)
+	var events []domain.Event
+	var days []domain.Day
+
+	for _, r := range parsed {
+		sid := nameLookup[strings.ToLower(r.fullName)]
+		if sid == "" {
+			warnings = append(warnings, fmt.Sprintf("Rankinis: dalyvis %q nerastas", r.fullName))
+			continue
+		}
+
+		ei := eventMap[r.eventName]
+		eventID := "manual:" + ei.earliest.Format("2006-01-02") + ":" + r.eventName
+		dayNum := dayNumberFor[r.eventName][r.date.Format("2006-01-02")]
+
+		status := "ok"
+		if r.isDsq {
+			status = "dsq"
+		}
+		class := ""
+		if r.isOpen {
+			class = "open"
+		}
+
+		results = append(results, domain.StoredResult{
+			SID:        sid,
+			EventID:    eventID,
+			DayNumber:  dayNum,
+			Class:      class,
+			Time:       r.dur,
+			LeaderTime: r.leaderDur,
+			Status:     status,
+		})
+
+		if !seenEvents[eventID] {
+			seenEvents[eventID] = true
+			events = append(events, domain.Event{
+				ID:          eventID,
+				Name:        r.eventName,
+				Date:        ei.earliest,
+				DayCount:    len(ei.dates),
+				Coefficient: 1.00,
+			})
+			for _, d := range ei.dates {
+				dayKey := eventID + ":" + d.Format("2006-01-02")
+				if !seenDays[dayKey] {
+					seenDays[dayKey] = true
+					dn := dayNumberFor[r.eventName][d.Format("2006-01-02")]
+					days = append(days, domain.Day{
+						EventID: eventID,
+						Number:  dn,
+						Date:    d,
+					})
+				}
+			}
+		}
+	}
+
+	return results, events, days, warnings
 }
 
 // ClearAndWriteResults clears the Rezultatai sheet and writes new rows.
@@ -666,9 +840,9 @@ func (wb *Workbook) createTemplate() error {
 		f.SetCellValue(texts.SheetResultsLV, cellName(i+1, 1), h)
 	}
 
-	// Manual entry sheet (same columns)
+	// Manual entry sheet (simplified columns)
 	f.NewSheet(texts.SheetManualEntry)
-	for i, h := range texts.ResultColumns {
+	for i, h := range texts.ManualColumns {
 		f.SetCellValue(texts.SheetManualEntry, cellName(i+1, 1), h)
 	}
 

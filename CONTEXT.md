@@ -83,7 +83,7 @@ For a **Relay**, the individual terms map to the **Leg**: **Participant Result**
 ### Manual entry
 
 **Manual Event**:
-An **Event** entered by hand in the workbook (not scraped); all data — participant time, leader time, class, date — must be provided by the user. Included in **Day Score** and **Season Score** calculation like any other Event.
+An **Event** entered by hand in the workbook (not scraped). The user provides event name, date, participant name, time, and leader time. The tool resolves participant names against the Dalyviai list (matching both "Surname Name" and "Name Surname" orderings, case-insensitive), generates a deterministic event ID (`manual:YYYY-MM-DD:EventName`), and derives day numbers from sorted unique dates within the same event name. Included in **Day Score** and **Season Score** calculation like any other Event. Events are auto-registered in the Varžybos sheet with coefficient 1.00.
 _Avoid_: Custom event, external event
 
 ### Rating and reporting
@@ -113,7 +113,7 @@ Fixed coefficient applied instead of (not multiplied by) the **Event Coefficient
 _Avoid_: OPEN penalty, OPEN multiplier
 
 **Start Count**:
-Number of event-days where a **Participant** has any entry (including dsq/dns/dnf — score 0 still counts as a start); displayed in the report.
+Number of event-days where a **Participant** has any entry (including dsq/dnf — score 0 still counts as a start); dns entries are excluded entirely. Displayed in the report.
 _Avoid_: Participation count
 
 **Report**:
@@ -149,10 +149,10 @@ _Avoid_: Export, output
 | `Varžybos` | Event metadata (ID, name, date, sport, relay, day count, coefficient) | Tool appends; user edits coefficient |
 | `Dienos` | Day metadata (event ID, event name, day #, name, date) | Tool appends; user may correct date |
 | `Rezultatai` | Crawled raw results: one row per participant × event × day | Tool (cleared & rebuilt each crawl) |
-| `Rankinis įvedimas` | Manual results: same columns as `Rezultatai` | User only |
+| `Rankinis įvedimas` | Manual results: Varžybos, Data, Pavardė Vardas, Laikas, Lyderio laikas, Open grupė?, Diskvalifikuotas? | User only |
 
-`Rezultatai` columns: Dalyvio ID, Varžybų ID, Diena, Klasė, Laikas, Lyderio laikas, Būsena, Vieta.
-`Rankinis įvedimas` columns: identical to `Rezultatai`. Manual events use user-invented IDs that must match a row in `Varžybos` for coefficient lookup.
+`Rezultatai` columns: Dalyvio ID, Varžybų ID, Dalyvis, Varžybos, Diena, Grupė, Laikas, Lyderio laikas, Būsena, Vieta, Nuoroda.
+`Rankinis įvedimas` columns: Varžybos (event name), Data (date), Pavardė Vardas (full name), Laikas, Lyderio laikas, Open grupė? (optional boolean), Diskvalifikuotas? (optional boolean). The tool resolves names to SIDs, generates event IDs, derives day numbers, and auto-registers events in Varžybos.
 
 Data never flows between `Rezultatai` and `Rankinis įvedimas`. Both are read by the report generator.
 

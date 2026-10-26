@@ -56,7 +56,7 @@ var DayStatusDisplay = map[string]string{
 	"not entered": "nedalyvavo",
 }
 
-// Results sheet columns (shared by Rezultatai and Rankinis įvedimas).
+// Results sheet columns (Rezultatai, Rezultatai-LV).
 const (
 	ColResultSID         = "Dalyvio ID"
 	ColResultEventID     = "Varžybų ID"
@@ -71,11 +71,28 @@ const (
 	ColResultLink        = "Nuoroda"
 )
 
-// ResultColumns is the ordered header for Rezultatai / Rankinis įvedimas.
+// ResultColumns is the ordered header for Rezultatai / Rezultatai-LV.
 var ResultColumns = []string{
 	ColResultSID, ColResultEventID, ColResultParticipant, ColResultEventName,
 	ColResultDay, ColResultClass, ColResultTime, ColResultLeaderTime,
 	ColResultStatus, ColResultPlace, ColResultLink,
+}
+
+// Manual entry sheet columns (Rankinis įvedimas).
+const (
+	ColManualEvent  = "Varžybos"
+	ColManualDate   = "Data"
+	ColManualName   = "Pavardė Vardas"
+	ColManualTime   = "Laikas"
+	ColManualLeader = "Lyderio laikas"
+	ColManualOpen   = "Open grupė?"
+	ColManualDsq    = "Diskvalifikuotas?"
+)
+
+// ManualColumns is the ordered header for Rankinis įvedimas.
+var ManualColumns = []string{
+	ColManualEvent, ColManualDate, ColManualName,
+	ColManualTime, ColManualLeader, ColManualOpen, ColManualDsq,
 }
 
 // Report headers.

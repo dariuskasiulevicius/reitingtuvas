@@ -228,7 +228,30 @@ func main() {
 	// Read all results (Rezultatai + Rezultatai-LV + Rankinis)
 	rezultatai, _ := wb.ReadResults()
 	rezultataiLV, _ := wb.ReadResultsLV()
-	rankinis, _ := wb.ReadManualEntries()
+	rankinis, manualEvents, manualDays, manualWarnings := wb.ReadManualEntries(participants)
+
+	if len(manualWarnings) > 0 {
+		fmt.Printf("Rankinio įvedimo įspėjimai: %d\n", len(manualWarnings))
+		for _, w := range manualWarnings {
+			fmt.Printf("  ! %s\n", w)
+		}
+	}
+
+	// Auto-register manual events/days
+	if len(manualEvents) > 0 {
+		existingEvt, _ := wb.ReadEventIDs()
+		manualEventNames := make(map[string]string)
+		for _, ev := range manualEvents {
+			manualEventNames[ev.ID] = ev.Name
+			if !existingEvt[ev.ID] {
+				wb.AppendEvent(ev)
+			}
+		}
+		for _, d := range manualDays {
+			wb.AppendDay(d, manualEventNames[d.EventID])
+		}
+	}
+
 	allResults := append(rezultatai, rezultataiLV...)
 	allResults = append(allResults, rankinis...)
 
