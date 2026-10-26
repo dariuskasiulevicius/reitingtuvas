@@ -240,6 +240,7 @@ func main() {
 	// Auto-register manual events/days
 	if len(manualEvents) > 0 {
 		existingEvt, _ := wb.ReadEventIDs()
+		existingDays, _ := wb.ReadDayDates()
 		manualEventNames := make(map[string]string)
 		for _, ev := range manualEvents {
 			manualEventNames[ev.ID] = ev.Name
@@ -248,7 +249,10 @@ func main() {
 			}
 		}
 		for _, d := range manualDays {
-			wb.AppendDay(d, manualEventNames[d.EventID])
+			dayKey := fmt.Sprintf("%s:%d", d.EventID, d.Number)
+			if _, exists := existingDays[dayKey]; !exists {
+				wb.AppendDay(d, manualEventNames[d.EventID])
+			}
 		}
 	}
 
