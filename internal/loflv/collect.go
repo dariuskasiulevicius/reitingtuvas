@@ -314,11 +314,18 @@ func (c *Collector) fetchResults(eventID int, view int) (string, error) {
 func groupEvents(events []SeriesEvent) (standalone []SeriesEvent, multiDay map[int][]SeriesEvent) {
 	multiDay = make(map[int][]SeriesEvent)
 
+	var standaloneCandidate []SeriesEvent
 	for _, ev := range events {
 		if ev.IsStandalone() {
-			standalone = append(standalone, ev)
+			standaloneCandidate = append(standaloneCandidate, ev)
 		} else {
 			multiDay[ev.ParentID] = append(multiDay[ev.ParentID], ev)
+		}
+	}
+
+	for _, ev := range standaloneCandidate {
+		if _, hasChildren := multiDay[ev.ID]; !hasChildren {
+			standalone = append(standalone, ev)
 		}
 	}
 

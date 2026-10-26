@@ -416,6 +416,25 @@ func TestGroupEvents(t *testing.T) {
 	}
 }
 
+func TestGroupEvents_ParentExcludedFromStandalone(t *testing.T) {
+	events := []SeriesEvent{
+		{ID: 100, ParentID: 0},  // parent of multi-day → must NOT be standalone
+		{ID: 5, ParentID: 0},   // true standalone
+		{ID: 3, ParentID: 100}, // child day
+		{ID: 4, ParentID: 100}, // child day
+	}
+	standalone, multi := groupEvents(events)
+	if len(standalone) != 1 {
+		t.Errorf("standalone=%d, want 1 (parent 100 excluded)", len(standalone))
+	}
+	if standalone[0].ID != 5 {
+		t.Errorf("standalone[0].ID=%d, want 5", standalone[0].ID)
+	}
+	if len(multi) != 1 || len(multi[100]) != 2 {
+		t.Errorf("multi=%+v", multi)
+	}
+}
+
 func TestFindEventLeaderTime(t *testing.T) {
 	rows := []EventRow{
 		{Place: 2, Time: 30 * time.Minute, Status: "ok"},

@@ -127,6 +127,10 @@ func ComputeRating(
 	bySID := make(map[string]*sidData)
 
 	for _, r := range results {
+		if r.Status == "dns" {
+			continue
+		}
+
 		sd, ok := bySID[r.SID]
 		if !ok {
 			sd = &sidData{scores: make(map[string]float64)}
