@@ -352,6 +352,16 @@ func TestReadManualEntries(t *testing.T) {
 	if warnings[0] != `Rankinis: dalyvis "Nežinomas Asmuo" nerastas` {
 		t.Errorf("warning=%q", warnings[0])
 	}
+
+	// Check error column written back: H6="nerastas", H2="" (resolved)
+	errVal, _ := f.GetCellValue(sheet, "H6")
+	if errVal != "nerastas" {
+		t.Errorf("H6 error=%q, want nerastas", errVal)
+	}
+	okVal, _ := f.GetCellValue(sheet, "H2")
+	if okVal != "" {
+		t.Errorf("H2 error=%q, want empty", okVal)
+	}
 }
 
 func TestReadManualEntries_Empty(t *testing.T) {

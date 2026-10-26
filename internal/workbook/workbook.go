@@ -476,6 +476,7 @@ func (wb *Workbook) ReadManualEntries(participants []domain.Participant) ([]doma
 	colLeader := headers[texts.ColManualLeader]
 	colOpen := headers[texts.ColManualOpen]
 	colDsq := headers[texts.ColManualDsq]
+	colError := headers[texts.ColManualError]
 
 	// Build name→SID lookup (both orderings, lowercased)
 	nameLookup := make(map[string]string)
@@ -490,6 +491,7 @@ func (wb *Workbook) ReadManualEntries(participants []domain.Participant) ([]doma
 	}
 
 	type rawRow struct {
+		excelRow   int // 1-based Excel row number
 		eventName  string
 		date       time.Time
 		fullName   string
@@ -520,6 +522,7 @@ func (wb *Workbook) ReadManualEntries(participants []domain.Participant) ([]doma
 		}
 
 		parsed = append(parsed, rawRow{
+			excelRow:  i + 1, // 1-based
 			eventName: eventName,
 			date:      date,
 			fullName:  fullName,
@@ -580,11 +583,14 @@ func (wb *Workbook) ReadManualEntries(participants []domain.Participant) ([]doma
 	var days []domain.Day
 
 	for _, r := range parsed {
+		errCell := cellName(colError+1, r.excelRow)
 		sid := nameLookup[strings.ToLower(r.fullName)]
 		if sid == "" {
 			warnings = append(warnings, fmt.Sprintf("Rankinis: dalyvis %q nerastas", r.fullName))
+			wb.f.SetCellValue(texts.SheetManualEntry, errCell, "nerastas")
 			continue
 		}
+		wb.f.SetCellValue(texts.SheetManualEntry, errCell, "")
 
 		ei := eventMap[r.eventName]
 		eventID := "manual:" + ei.earliest.Format("2006-01-02") + ":" + r.eventName

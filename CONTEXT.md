@@ -149,10 +149,10 @@ _Avoid_: Export, output
 | `Varžybos` | Event metadata (ID, name, date, sport, relay, day count, coefficient) | Tool appends; user edits coefficient |
 | `Dienos` | Day metadata (event ID, event name, day #, name, date) | Tool appends; user may correct date |
 | `Rezultatai` | Crawled raw results: one row per participant × event × day | Tool (cleared & rebuilt each crawl) |
-| `Rankinis įvedimas` | Manual results: Varžybos, Data, Pavardė Vardas, Laikas, Lyderio laikas, Open grupė?, Diskvalifikuotas? | User only |
+| `Rankinis įvedimas` | Manual results: Varžybos, Data, Pavardė Vardas, Laikas, Lyderio laikas, Open grupė?, Diskvalifikuotas?, Klaida | User + tool (Klaida) |
 
 `Rezultatai` columns: Dalyvio ID, Varžybų ID, Dalyvis, Varžybos, Diena, Grupė, Laikas, Lyderio laikas, Būsena, Vieta, Nuoroda.
-`Rankinis įvedimas` columns: Varžybos (event name), Data (date), Pavardė Vardas (full name), Laikas, Lyderio laikas, Open grupė? (optional boolean), Diskvalifikuotas? (optional boolean). The tool resolves names to SIDs, generates event IDs, derives day numbers, and auto-registers events in Varžybos.
+`Rankinis įvedimas` columns: Varžybos (event name), Data (date), Pavardė Vardas (full name), Laikas, Lyderio laikas, Open grupė? (optional boolean), Diskvalifikuotas? (optional boolean), Klaida (tool-written: "nerastas" if name not found, cleared on success). The tool resolves names to SIDs, generates event IDs, derives day numbers, and auto-registers events in Varžybos.
 
 Data never flows between `Rezultatai` and `Rankinis įvedimas`. Both are read by the report generator.
 

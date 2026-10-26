@@ -87,12 +87,14 @@ const (
 	ColManualLeader = "Lyderio laikas"
 	ColManualOpen   = "Open grupė?"
 	ColManualDsq    = "Diskvalifikuotas?"
+	ColManualError  = "Klaida"
 )
 
 // ManualColumns is the ordered header for Rankinis įvedimas.
 var ManualColumns = []string{
 	ColManualEvent, ColManualDate, ColManualName,
 	ColManualTime, ColManualLeader, ColManualOpen, ColManualDsq,
+	ColManualError,
 }
 
 // Report headers.
